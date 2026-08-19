@@ -11,8 +11,8 @@
 
 import { renderFrame } from './posprocess.js';
 import { getViewportSize } from './scene.js';
-import { tickShaderSystem } from './shader-system/ShaderEffectManager.js';
-import { tickDomain } from './shader-system/DomainManager.js';
+import { tickShaderSystem } from './ShaderEffectManager.js';
+import { tickDomain } from './DomainManager.js';
 
 window._exportPaused = false;
 let _rendering = false, _cancelled = false;
