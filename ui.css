@@ -1,0 +1,4534 @@
+/* ── Reset & base ──────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  width: 100%; height: 100%;
+  margin: 0; overflow: hidden;
+  background: var(--void);
+  touch-action: none;
+  user-select: none; -webkit-user-select: none;
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-1);
+  /* Mata o flash azul de toque do WebView/Chrome Android em qualquer elemento clicável do app */
+  -webkit-tap-highlight-color: transparent;
+}
+/* Centers <body> when it's been sized to an explicit width/height by the
+   "Tamanho do app" control (Projetos → ⚙ → Tamanho do app) instead of
+   filling the real window — see applyViewportOverride() in launcher.js. */
+html { display: flex; align-items: center; justify-content: center; }
+* { -webkit-tap-highlight-color: transparent; }
+button, a, [tabindex] { outline: none; -webkit-tap-highlight-color: transparent; font-family: inherit; }
+button:focus, [tabindex]:focus { outline: none; }
+/* Keyboard-only focus ring — never shows on touch/mouse clicks (:focus-visible),
+   so the touch-first layout stays clean while external keyboards / switch
+   devices still get a clear, on-brand indicator. */
+button:focus-visible, [tabindex]:focus-visible, a:focus-visible, input:focus-visible {
+  outline: 2px solid var(--accent-orange);
+  outline-offset: 1px;
+  border-radius: var(--r-xs);
+}
+
+/* Baseline hover/press/disabled feel for every <button> in the app — component
+   classes below keep owning their own colors/layout and simply layer on top
+   of this, so no button is ever left with a silent (feedback-less) state.
+   The inset box-shadow gives every button a faint hardware-key bevel instead
+   of a flat mobile-app tile; box-shadow (unlike background) survives being
+   layered under a component's own `background:` shorthand. */
+button { transition: filter .15s ease, transform .08s ease, opacity .15s ease; }
+button:not(:disabled) {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06), inset 0 -1px 0 rgba(0,0,0,.24);
+}
+button:not(:disabled):hover { filter: brightness(1.1); }
+button:not(:disabled):active { transform: translateY(1px); box-shadow: inset 0 1px 2px rgba(0,0,0,.3); }
+button:disabled {
+  opacity: var(--state-disabled-opacity);
+  filter: grayscale(.5);
+  cursor: not-allowed;
+  pointer-events: none;
+}
+body {
+  /* flex:none — a child of the new html{display:flex} rule above must not
+     be auto-shrunk/grown by flexbox; its size is either the 100% from the
+     shared rule or an explicit px size set inline by applyViewportOverride().
+     transform (present even as the identity scale(1)) makes body the
+     containing block for every position:fixed element inside it — the
+     entire app UI — which is what lets "Tamanho do app" confine the whole
+     interface to a simulated screen size instead of the real window. */
+  position: relative;
+  flex: none;
+  transform: scale(1);
+  transform-origin: center center;
+}
+canvas { display: block; width: 100%; height: 100%; -webkit-tap-highlight-color: transparent; }
+
+/* ── CSS vars ──────────────────────────────────────────────────────────────── */
+:root {
+  /* Layout */
+  /* Top bar mesmo tamanho da bottom bar (referencia a mesma variável, então
+     os dois ficam sempre em sincronia, inclusive nos breakpoints abaixo). */
+  /* Chrome reduzido: barras e painéis laterais um pouco mais finos, o que
+     libera mais área visível de viewport na tela (o canvas 3D já é
+     full-bleed — ver scene.js/main.js — então menos painel = mais viewport
+     visível por baixo). Breakpoints mobile abaixo continuam sobrepondo
+     estes valores normalmente. */
+  --bar-h-bot: 46px;
+  --bar-h-top: var(--bar-h-bot);
+  --left-w: 208px;
+  --right-w: 182px;
+
+  /* Radius scale — small, precise radii read as "instrument", not "app" */
+  --r-xs: 2px;
+  --r-sm: 3px;
+  --r-md: 5px;
+  --r-lg: 8px;
+
+  /* Spacing scale */
+  --sp-1: 4px;
+  --sp-2: 6px;
+  --sp-3: 8px;
+  --sp-4: 10px;
+  --sp-5: 14px;
+
+  /* Type — Inter for UI chrome (renders cleanly at 9-12px), a monospace
+     for anything numeric/coordinate-like (transform gizmo, frame counter,
+     stats) so figures line up the way they do in every other pro 3D tool. */
+  --font-ui: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Courier New', ui-monospace, monospace;
+  --fs-2xs: 9px;
+  --fs-xs: 10px;
+  --fs-sm: 11px;
+  --fs-md: 12px;
+  --fs-lg: 14px;
+  --tr-eyebrow: 0.07em;   /* tracking for small uppercase section labels */
+
+  /* Primary accent — unchanged, it's already a distinctive signature */
+  --accent-orange: #ffb14a;
+  --accent-amber: #ffd032;
+  --accent-orange-bg: rgba(255,177,74,0.10);
+  --accent-orange-bg-strong: rgba(255,177,74,0.16);
+  --accent-orange-border: rgba(255,177,74,0.7);
+
+  /* Secondary semantic accents — already used ad hoc around the app
+     (camera = cyan, labs/settings = violet, animate = green, selection =
+     blue); named here so every panel now pulls from one shared palette
+     instead of scattered one-off hex values. */
+  --accent-select: #5b9dff;
+  --accent-camera: #7edfff;
+  --accent-labs:   #a78bfa;
+  --accent-anim:   #4cefac;
+  --accent-danger: #f87171;
+
+  /* Surfaces — neutral engineered dark (Blender/Resolve-style grey-black,
+     not a blue-tinted "gamer" black). One value change here quietly
+     re-tunes every bar, panel and button that already reads it. */
+  --void: #0a0a0c;
+  --panel-bg: rgba(16, 16, 19, 0.98);
+  --panel-bg-raised: rgba(22, 22, 26, 0.98);
+  --panel-bg-recessed: rgba(7, 7, 9, 0.55);
+  --panel-border: rgba(255,255,255,0.14);
+  --panel-border-strong: rgba(255,255,255,0.22);
+  --btn-bg: rgba(21, 21, 25, 0.85);
+  --btn-border: rgba(255,255,255,0.13);
+  --state-hover-bg: rgba(31,31,37,0.94);
+  --state-hover-border: rgba(255,255,255,0.24);
+  --state-disabled-opacity: 0.35;
+
+  /* Text */
+  --text-1: #eef0f4;
+  --text-dim: rgba(238,242,255,0.55);
+  --text-muted: rgba(238,242,255,0.35);
+  --text-faint: rgba(238,242,255,0.2);
+}
+
+/* ── Design-system components ─────────────────────────────────────────────────
+   Shared, reusable chrome pieces used across every panel from here on:
+   a panel header (icon + tracked eyebrow label + optional actions), an
+   icon rail (replaces the plain tab strip), and a couple of small utilities.
+   Adding these here — rather than inline per panel — is what keeps every
+   panel's "caption bar" identical down to the pixel, the way a real
+   docked-panel tool (SFM's Animation Set Editor, Blender's editors) reads
+   as one coherent system instead of N hand-built headers. ── */
+.panelHeader {
+  display: flex; align-items: center; gap: var(--sp-2);
+  min-height: 30px;
+  padding: 0 var(--sp-3);
+  background: rgba(0,0,0,0.22);
+  border-bottom: 1px solid var(--panel-border);
+  flex-shrink: 0;
+}
+.panelHeader svg {
+  width: 13px; height: 13px; flex-shrink: 0;
+  stroke: var(--accent-orange); fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  opacity: 0.9;
+}
+.panelHeader .eyebrow { flex: 1; min-width: 0; }
+.panelHeader .panelHeaderActions {
+  display: flex; align-items: center; gap: var(--sp-1);
+  flex-shrink: 0;
+}
+
+.eyebrow {
+  font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: var(--tr-eyebrow);
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Icon rail — vertical strip of tool buttons with a left accent edge on the
+   active item, instead of a filled tab. Reads as instrument chrome (the
+   left toolbar in Blender, the tool column in SFM) rather than a row of
+   app buttons. */
+.toolRail { display: flex; flex-direction: column; }
+.toolRailBtn {
+  position: relative;
+  width: 100%; min-height: 38px;
+  display: flex; align-items: center; justify-content: center;
+  border: none; border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color .15s, background .15s, border-color .15s;
+}
+.toolRailBtn svg {
+  width: 17px; height: 17px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+.toolRailBtn:hover { color: var(--text-1); background: rgba(255,255,255,0.04); }
+.toolRailBtn.active {
+  color: var(--accent-orange);
+  background: var(--accent-orange-bg);
+  border-left-color: var(--accent-orange);
+}
+
+/* ── Bars ──────────────────────────────────────────────────────────────────── */
+#topBar, #bottomBar {
+  position: fixed; left: 0; right: 0; z-index: 100;
+  pointer-events: none;
+  display: flex; flex-direction: column;
+}
+#topBar { top: 0; height: var(--bar-h-top); flex-direction: column; }
+#bottomBar { bottom: 0; height: var(--bar-h-bot); flex-direction: column-reverse; }
+
+.barAccent {
+  display: none;
+}
+
+.barContent {
+  flex: 1;
+  background: rgba(10, 10, 12, 0.98);
+  border-bottom: 1px solid var(--panel-border);
+  display: flex; align-items: center;
+  padding: 0 12px;
+  pointer-events: auto;
+}
+
+.bottomBarContent {
+  border-bottom: none;
+  border-top: 1px solid var(--panel-border);
+}
+
+/* ── Gizmo panel (top bar) — sits in a recessed group box, like a real
+   toolbar cluster, instead of floating loose in the bar ── */
+#gizmoPanel {
+  display: flex; gap: 5px;
+  background: rgba(0,0,0,0.22);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 3px;
+}
+
+.gizmoBtn {
+  width: 28px; height: 28px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--text-1);
+  cursor: pointer;
+  display: grid; place-items: center;
+  transition: border-color .15s, background .15s, box-shadow .15s;
+}
+.gizmoBtn svg {
+  width: 14px; height: 14px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.gizmoBtn:hover { border-color: rgba(255,255,255,0.22); background: rgba(28,32,44,0.92); }
+.gizmoBtn.active {
+  border-color: rgba(255,177,74,0.9);
+  box-shadow: 0 0 0 1px rgba(255,177,74,0.22), 0 4px 14px rgba(0,0,0,0.3);
+  color: var(--accent-orange);
+}
+.gizmoBtn:active { transform: translateY(1px); }
+
+.gizmoDivider {
+  width: 1px; background: rgba(255,255,255,0.1);
+  margin: 2px 2px; align-self: stretch;
+}
+
+#deepSelectBtn.active {
+  border-color: rgba(120,180,255,0.9);
+  box-shadow: 0 0 0 1px rgba(120,180,255,0.22), 0 4px 14px rgba(0,0,0,0.3);
+  color: #78b4ff;
+}
+
+/* ── Bloom sections ─────────────────────────────────────────────────────────── */
+.bloomSection {
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: var(--r-sm);
+  padding: 10px 10px 8px;
+  margin-bottom: 8px;
+  background: rgba(255,255,255,0.02);
+}
+.bloomSectionHeader {
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--fs-sm); font-weight: 600; letter-spacing: .04em;
+  color: rgba(255,255,255,0.55); text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.bloomSectionHeader svg {
+  width: 13px; height: 13px; flex-shrink: 0;
+  stroke: currentColor; fill: none; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.bloomObjName {
+  margin-left: auto;
+  color: rgba(255,255,255,0.35);
+  font-size: var(--fs-xs); font-weight: 400; letter-spacing: 0;
+  text-transform: none; max-width: 90px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bloomSectionObj .gridForm label input {
+  opacity: 0.55; transition: opacity .2s;
+}
+.bloomSectionObj.hasSelection .gridForm label input { opacity: 1; }
+.bloomObjHint {
+  font-size: 10.5px; color: rgba(255,255,255,0.3);
+  margin: 6px 0 0; line-height: 1.4; text-align: center;
+}
+.bloomSectionObj.hasSelection .bloomObjHint { display: none; }
+
+/* ── Left panel ────────────────────────────────────────────────────────────── */
+#leftPanel {
+  position: fixed;
+  left: 0; top: var(--bar-h-top); bottom: var(--bar-h-bot);
+  width: var(--left-w);
+  display: flex; flex-direction: column;
+  background: var(--panel-bg);
+  border-right: 1px solid var(--panel-border);
+  pointer-events: auto;
+  z-index: 50;
+}
+
+/* ── Left panel button row — reads as a docked tab strip: the strip itself
+   sits recessed (darker) and the active tab is raised to meet the panel
+   body below it, like a folder tab, instead of a floating underline. ── */
+#leftPanelButtons {
+  display: flex;
+  background: rgba(0,0,0,0.24);
+  border-bottom: 1px solid var(--panel-border);
+  flex-shrink: 0;
+}
+
+.leftPanelBtn {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 4px;
+  padding: 8px 4px 7px;
+  border: none;
+  border-right: 1px solid var(--panel-border);
+  border-top: 2px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color .15s, background .15s;
+  font-size: var(--fs-2xs); letter-spacing: 0.3px;
+  font-family: inherit;
+  margin-bottom: -1px;
+}
+.leftPanelBtn:last-child { border-right: none; }
+.leftPanelBtn svg {
+  width: 16px; height: 16px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.leftPanelBtn:hover { color: var(--text-1); background: rgba(255,255,255,0.04); }
+.leftPanelBtn.active {
+  color: var(--accent-orange);
+  background: linear-gradient(var(--accent-orange-bg), var(--panel-bg) 60%);
+  border-top: 2px solid var(--accent-orange);
+  border-right-color: var(--panel-border);
+}
+
+/* ── Left panel content ────────────────────────────────────────────────────── */
+#leftPanelContent {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  padding: 0;
+}
+#leftPanelContent::-webkit-scrollbar { width: 4px; }
+#leftPanelContent::-webkit-scrollbar-track { background: transparent; }
+#leftPanelContent::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1); border-radius: var(--r-xs);
+}
+
+.leftSubPanel { padding: 10px; }
+
+/* Same caption-bar language as #rightPanelHeader below (edge-to-edge via
+   negative margin, since .leftSubPanel already carries 10px padding) — one
+   header component, used everywhere, is what makes the whole shell read as
+   one designed system instead of five separately-styled panels. */
+.subPanelTitle {
+  display: flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: var(--tr-eyebrow);
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: -10px -10px 10px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--panel-border);
+  background: rgba(0,0,0,0.22);
+}
+.subPanelTitle svg {
+  width: 13px; height: 13px; flex-shrink: 0;
+  stroke: var(--accent-orange); fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  opacity: 0.9;
+}
+
+/* ── Right panel ───────────────────────────────────────────────────────────── */
+#rightPanel {
+  position: fixed;
+  right: 0; top: var(--bar-h-top); bottom: var(--bar-h-bot);
+  width: var(--right-w);
+  display: flex; flex-direction: column;
+  background: var(--panel-bg);
+  border-left: 1px solid var(--panel-border);
+  pointer-events: auto;
+  z-index: 50;
+}
+
+#rightPanelHeader {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px;
+  background: rgba(0,0,0,0.24);
+  border-bottom: 1px solid var(--panel-border);
+  flex-shrink: 0;
+}
+
+.rightPanelTitle {
+  font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: var(--tr-eyebrow);
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+/* ── Actions button & menu ─────────────────────────────────────────────────── */
+.actionsButton {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--btn-border);
+  border-radius: var(--r-sm);
+  background: var(--btn-bg);
+  color: var(--text-dim);
+  font-size: var(--fs-xs); font-family: inherit;
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.actionsButton svg {
+  width: 12px; height: 12px;
+  stroke: currentColor; fill: none;
+  stroke-width: 2; stroke-linecap: round;
+}
+.actionsButton:hover {
+  color: var(--text-1);
+  border-color: rgba(255,255,255,0.22);
+  background: rgba(28,32,44,0.92);
+}
+.actionsButton.active {
+  border-color: rgba(255,177,74,0.7);
+  color: var(--accent-orange);
+}
+
+.actionsMenu {
+  position: absolute;
+  top: calc(100% + 6px); right: 0;
+  width: 148px;
+  background: rgba(13, 15, 22, 0.97);
+  border: 1px solid rgba(255,255,255,0.13);
+  border-radius: var(--r-sm);
+  padding: 4px;
+  z-index: 200;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+  backdrop-filter: blur(16px);
+}
+
+.actionMenuItem {
+  width: 100%;
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 8px;
+  border: none; border-radius: var(--r-sm);
+  background: transparent;
+  color: rgba(238,242,255,0.8);
+  font-size: var(--fs-sm); font-family: inherit;
+  cursor: pointer; text-align: left;
+  transition: background .12s, color .12s;
+}
+.actionMenuItem svg {
+  width: 13px; height: 13px; flex-shrink: 0;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+.actionMenuItem:hover { background: rgba(255,255,255,0.07); color: var(--text-1); }
+.actionDanger:hover { background: rgba(239,68,68,0.14); color: var(--accent-danger); }
+.actionDivider {
+  height: 1px; margin: 3px 4px;
+  background: rgba(255,255,255,0.08);
+}
+
+/* ── Objects list ──────────────────────────────────────────────────────────── */
+#objectsList {
+  flex: 1; overflow-y: auto;
+  padding: 6px;
+}
+#objectsList::-webkit-scrollbar { width: 4px; }
+#objectsList::-webkit-scrollbar-track { background: transparent; }
+#objectsList::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1); border-radius: var(--r-xs);
+}
+
+.objectItem {
+  position: relative;
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 8px 5px 7px;
+  border: 1px solid transparent;
+  border-left: 2px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  transition: background .12s, border-color .12s, color .12s;
+  margin-bottom: 2px;
+}
+/* Element-Viewer-style tree guides — one per ancestor level, so nesting
+   reads at a glance instead of relying on indentation alone (SFM/Blender
+   Outliner convention). Consecutive sibling rows stack their guides into
+   one continuous rail automatically since each spans its own row's height. */
+.treeGuide {
+  position: absolute; top: 0; bottom: -2px;
+  width: 1px;
+  background: rgba(255,255,255,0.09);
+  pointer-events: none;
+}
+.objectItem:hover .treeGuide { background: rgba(255,255,255,0.14); }
+.objectItem > svg {  /* type icon */
+  width: 13px; height: 13px; flex-shrink: 0;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+  opacity: 0.7;
+}
+.objectItem:hover {
+  background: rgba(255,255,255,0.05);
+  color: var(--text-1); border-color: var(--panel-border);
+  border-left-color: var(--panel-border);
+}
+.objectItem.selected {
+  background: rgba(255,177,74,0.1);
+  color: var(--accent-orange);
+  border-color: rgba(255,177,74,0.3);
+  border-left-color: var(--accent-orange);
+}
+.objectItem.selected svg { opacity: 1; }
+/* Active = the one selection edits actually target (app.selected) when
+   several rows are multi-selected at once — brighter fill + solid border,
+   the same "active vs. merely selected" distinction Blender's Outliner
+   and SFM's Element Viewer both draw during multi-select. */
+.objectItem.active {
+  background: rgba(255,177,74,0.18);
+  border-color: rgba(255,177,74,0.55);
+}
+
+/* Group expand button */
+.groupToggleBtn {
+  width: 14px; height: 14px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: none; border: none; padding: 0;
+  cursor: pointer; color: var(--text-muted);
+  transition: color .12s;
+}
+.groupToggleBtn:hover { color: var(--text-1); }
+.groupToggleBtn svg {
+  width: 12px; height: 12px;
+  stroke: currentColor; fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  transition: transform .15s;
+}
+.groupToggleBtn svg.expanded { transform: rotate(90deg); }
+
+/* Spacer so non-group items align with group items */
+.groupToggleSpacer {
+  width: 14px; height: 14px; flex-shrink: 0; display: inline-block;
+}
+
+.objectName {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.objectChildCount {
+  flex-shrink: 0;
+  font-size: var(--fs-2xs); font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.06);
+  border-radius: 999px;
+  padding: 1px 6px;
+  min-width: 8px; text-align: center;
+}
+.objectItem.active .objectChildCount,
+.objectItem.selected .objectChildCount { color: var(--accent-orange); background: rgba(255,177,74,0.14); }
+
+.objectsEmpty {
+  padding: 20px 10px;
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* ── Panels shared content styles ─────────────────────────────────────────── */
+.panelSection {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+.sectionTitle {
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tr-eyebrow);
+}
+
+.categoryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-2);
+}
+
+.menuItem {
+  width: 100%; min-height: 42px;
+  border: 1px solid var(--btn-border);
+  border-radius: var(--r-sm);
+  background: var(--btn-bg);
+  color: var(--text-1);
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  align-items: center;
+  gap: var(--sp-2); padding: var(--sp-2) var(--sp-3);
+  cursor: pointer; text-align: left;
+  font-family: inherit;
+  transition: border-color .12s, background .12s;
+}
+.menuItem svg {
+  width: 16px; height: 16px;
+  stroke: var(--text-1); fill: none;
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+.menuItem span { font-size: var(--fs-xs); line-height: 1.1; }
+.menuItem:hover {
+  border-color: var(--state-hover-border);
+  background: var(--state-hover-bg);
+}
+.menuItem:active { transform: translateY(1px); }
+
+/* ── Empty state ───────────────────────────────────────────────────────────── */
+.emptyState {
+  display: flex; flex-direction: column;
+  align-items: center; gap: var(--sp-3);
+  padding: 24px 12px; text-align: center;
+  color: var(--text-muted);
+}
+.emptyState svg {
+  width: 28px; height: 28px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round;
+  opacity: 0.4;
+}
+.emptyState span { font-size: var(--fs-xs); line-height: 1.6; }
+
+/* ── gridForm (shared for Light, Render, etc.) ─────────────────────────────── */
+.gridForm {
+  display: grid; gap: var(--sp-2);
+}
+.gridForm label {
+  display: grid;
+  grid-template-columns: 1fr 80px;
+  align-items: center; gap: var(--sp-2);
+  font-size: var(--fs-xs); color: var(--text-dim);
+}
+.gridForm input[type="number"],
+.gridForm input[type="color"] {
+  width: 100%; height: 26px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--btn-border);
+  background: var(--panel-bg-recessed);
+  color: var(--text-1); outline: none;
+  padding: 0 7px; font-size: var(--fs-xs);
+}
+.gridForm input[type="number"] { font-family: var(--font-mono); }
+.gridForm input[type="color"] {
+  padding: 2px 3px; cursor: pointer;
+  -webkit-appearance: none;
+}
+.gridForm input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0; border-radius: var(--r-xs); overflow: hidden;
+}
+.gridForm input[type="color"]::-webkit-color-swatch { border: none; border-radius: var(--r-xs); }
+.checkField { grid-template-columns: 1fr 16px !important; }
+.checkField input { width: 13px; height: 13px; accent-color: var(--accent-orange); justify-self: end; }
+
+.materialTarget {
+  font-size: var(--fs-sm); color: var(--text-dim); margin-bottom: var(--sp-2);
+}
+
+/* ── Tab bar & panels ──────────────────────────────────────────────────────── */
+.tabBar {
+  display: flex; flex-wrap: wrap; gap: var(--sp-1);
+  margin: var(--sp-3) 0;
+}
+.tabBtn {
+  padding: 4px 8px; min-height: 24px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--text-dim);
+  cursor: pointer; font-size: var(--fs-2xs); font-family: inherit;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.tabBtn:hover { color: var(--text-1); border-color: var(--state-hover-border); }
+.tabBtn.active {
+  border-color: rgba(255,177,74,0.85);
+  color: var(--accent-orange);
+  background: rgba(255,177,74,0.08);
+}
+
+.tabPanel { display: flex; flex-direction: column; gap: var(--sp-2); }
+
+/* .modeList defined below in visualization section */
+
+.modeHint {
+  font-size: var(--fs-2xs); color: var(--text-muted);
+  line-height: 1.6; padding: 0 1px; margin-top: 4px;
+}
+.modeHint strong { color: rgba(238,242,255,0.5); }
+
+.renderModeBtn {
+  width: 100%; min-height: 30px;
+  display: flex; align-items: center; gap: 7px;
+  padding: 0 9px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--btn-border);
+  background: rgba(18, 22, 32, 0.72);
+  color: rgba(238,242,255,0.8);
+  cursor: pointer; font-size: var(--fs-xs); font-family: inherit;
+  text-align: left;
+  transition: border-color .12s, background .12s;
+}
+.renderModeBtn svg {
+  width: 13px; height: 13px; flex-shrink: 0;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.7; stroke-linecap: round;
+}
+.renderModeBtn:hover { border-color: rgba(255,255,255,0.2); background: rgba(28,32,44,0.9); }
+.renderModeBtn.active {
+  border-color: rgba(255,177,74,0.85);
+  color: var(--accent-orange);
+  background: rgba(255,177,74,0.08);
+}
+.renderModeBtn:active { transform: translateY(1px); }
+
+.menuAction {
+  width: 100%; min-height: 30px;
+  display: flex; align-items: center; gap: 7px;
+  padding: 0 9px; margin-top: 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--btn-border);
+  background: rgba(18, 22, 32, 0.72);
+  color: rgba(238,242,255,0.8);
+  cursor: pointer; font-size: var(--fs-xs); font-family: inherit;
+  transition: border-color .12s, background .12s;
+}
+.menuAction:hover { border-color: rgba(255,255,255,0.2); background: rgba(28,32,44,0.9); }
+
+/* ── Material panel (inner) ────────────────────────────────────────────────── */
+.materialShell { display: flex; flex-direction: column; gap: 7px; }
+.sectionHeader {
+  width: 100%; min-height: 28px;
+  border: 1px solid var(--btn-border);
+  border-radius: var(--r-sm);
+  background: rgba(18, 22, 32, 0.88);
+  color: var(--text-1);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 8px; cursor: pointer; font-size: var(--fs-sm); font-family: inherit;
+}
+.sectionBody { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; }
+.controlRow {
+  display: grid; grid-template-columns: 80px 1fr;
+  gap: 7px; align-items: center;
+}
+.controlLabel { font-size: var(--fs-xs); color: var(--text-dim); }
+.controlRow input[type="number"],
+.controlRow input[type="color"] {
+  width: 100%; height: 26px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--btn-border);
+  background: rgba(12, 14, 20, 0.82);
+  color: var(--text-1); outline: none; padding: 0 7px; font-size: var(--fs-xs);
+}
+.controlRow input[type="color"] { padding: 2px 3px; cursor: pointer; -webkit-appearance: none; }
+.controlRow input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; border-radius: var(--r-xs); overflow: hidden; }
+.controlRow input[type="color"]::-webkit-color-swatch { border: none; border-radius: var(--r-xs); }
+.textureGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.textureBtn {
+  width: 100%; min-height: 30px;
+  border-radius: var(--r-sm);
+  display: grid; grid-template-columns: 14px 1fr;
+  gap: 6px; padding: 0 7px; justify-items: start;
+  border: 1px solid var(--btn-border);
+  background: rgba(18, 22, 32, 0.72);
+  color: rgba(238,242,255,0.75);
+  cursor: pointer; font-family: inherit;
+}
+.textureBtn span { font-size: var(--fs-2xs); white-space: nowrap; }
+
+/* ── Noise hint ────────────────────────────────────────────────────────────── */
+.noiseModeHint {
+  font-size: var(--fs-2xs); color: var(--text-muted);
+  line-height: 1.5; margin: -2px 0 0;
+}
+
+/* ── Sample counter ────────────────────────────────────────────────────────── */
+#sampleCounterWrap {
+  position: fixed;
+  bottom: calc(var(--bar-h-bot) + 10px);
+  left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  padding: 3px 12px;
+  font-size: var(--fs-xs); font-family: monospace;
+  color: rgba(255,255,255,0.7);
+  pointer-events: none;
+  transition: opacity .2s; z-index: 999;
+}
+#sampleCounterWrap.hidden { opacity: 0; }
+#sampleCounter.sampleDone { color: #6cffa0; }
+
+/* ── Objects section (top half of right panel) ─────────────────────────────── */
+#objectsSection {
+  flex: 1;
+  display: flex; flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  transition: flex .2s;
+}
+#objectsSection.split { flex: 0 0 50%; }
+
+#objectsList {
+  flex: 1; overflow-y: auto;
+  padding: 6px;
+}
+#objectsList::-webkit-scrollbar { width: 4px; }
+#objectsList::-webkit-scrollbar-track { background: transparent; }
+#objectsList::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: var(--r-xs); }
+
+/* ── Bone section (bottom half of right panel) ─────────────────────────────── */
+#bonePanelContainer {
+  flex: 0 0 50%;
+  display: flex; flex-direction: column;
+  border-top: 1px solid var(--panel-border);
+  min-height: 0;
+  background: rgba(8, 11, 18, 0.5);
+}
+
+#bonePanelHeader {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--panel-border);
+  flex-shrink: 0;
+}
+.bonePanelTitle {
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: var(--tr-eyebrow);
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.bonePanelTitle svg {
+  width: 12px; height: 12px;
+  stroke: var(--accent-amber); fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.boneCloseBtn {
+  width: 20px; height: 20px;
+  display: grid; place-items: center;
+  border: none; background: none; padding: 0; cursor: pointer;
+  color: var(--text-muted); border-radius: var(--r-xs);
+  transition: color .12s, background .12s;
+}
+.boneCloseBtn:hover { color: var(--text-1); background: rgba(255,255,255,0.07); }
+.boneCloseBtn svg {
+  width: 12px; height: 12px;
+  stroke: currentColor; fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+#boneTree {
+  flex: 1; overflow-y: auto; padding: 6px;
+}
+#boneTree::-webkit-scrollbar { width: 4px; }
+#boneTree::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: var(--r-xs); }
+
+.boneNode {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 6px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  transition: background .1s, color .1s;
+  margin-bottom: 1px;
+}
+.boneNode:hover { background: rgba(255,215,50,0.07); color: var(--text-1); }
+.boneNode.selected { background: rgba(255,215,50,0.13); color: var(--accent-amber); }
+.boneNode svg {
+  width: 11px; height: 11px; flex-shrink: 0;
+  stroke: var(--accent-amber); fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  opacity: 0.7;
+}
+.boneNode.selected svg { opacity: 1; }
+.boneExpandBtn {
+  width: 12px; height: 12px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--text-muted);
+}
+.boneExpandBtn svg {
+  width: 10px; height: 10px;
+  stroke: currentColor; fill: none; stroke-width: 2;
+  transition: transform .12s;
+}
+.boneExpandBtn svg.exp { transform: rotate(90deg); }
+.boneSpacer { width: 12px; flex-shrink: 0; }
+.boneChildren { margin-left: 14px; }
+
+/* ── Model import button ───────────────────────────────────────────────────── */
+.importModelBtn {
+  width: 100%; min-height: 38px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 10px;
+  border: 1px dashed rgba(255,255,255,0.18);
+  border-radius: var(--r-sm);
+  background: rgba(18, 22, 32, 0.5);
+  color: rgba(238,242,255,0.65);
+  cursor: pointer; font-size: var(--fs-xs); font-family: inherit;
+  text-align: left;
+  transition: border-color .12s, background .12s, color .12s;
+}
+.importModelBtn svg {
+  width: 15px; height: 15px; flex-shrink: 0;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+.importModelBtn:hover {
+  border-color: rgba(255,177,74,0.5);
+  background: rgba(255,177,74,0.06);
+  color: var(--text-1);
+}
+
+/* ── Texture import base button ────────────────────────────────────────────── */
+.importBaseTexBtn {
+  width: 100%; min-height: 34px;
+  display: flex; align-items: center; gap: 7px;
+  padding: 0 9px; margin-bottom: 8px;
+  border: 1px dashed rgba(255,177,74,0.3);
+  border-radius: var(--r-sm);
+  background: rgba(255,177,74,0.05);
+  color: rgba(255,177,74,0.8);
+  cursor: pointer; font-size: var(--fs-xs); font-family: inherit;
+  transition: border-color .12s, background .12s, color .12s;
+}
+.importBaseTexBtn svg {
+  width: 13px; height: 13px; flex-shrink: 0;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.importBaseTexBtn:hover {
+  border-color: rgba(255,177,74,0.7);
+  background: rgba(255,177,74,0.1);
+  color: #ffb14a;
+}
+
+/* ── Right panel footer (bone icon row) ────────────────────────────────────── */
+#rightPanelFooter {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 6px 8px;
+  border-top: 1px solid var(--panel-border);
+  background: rgba(8,10,16,0.5);
+}
+
+/* ── Bone toggle button — icon-only, bottom-right of right panel ──────────── */
+#boneRevealBtn {
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  border: 1px solid var(--btn-border);
+  border-radius: var(--r-sm);
+  background: var(--btn-bg);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color .12s, border-color .12s, background .12s, box-shadow .12s;
+  flex-shrink: 0;
+}
+#boneRevealBtn svg {
+  width: 15px; height: 15px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+#boneRevealBtn:hover {
+  color: var(--accent-amber);
+  border-color: rgba(255,215,50,0.4);
+  background: rgba(255,215,50,0.06);
+}
+#boneRevealBtn.active {
+  color: var(--accent-amber);
+  border-color: rgba(255,215,50,0.7);
+  background: rgba(255,215,50,0.12);
+  box-shadow: 0 0 0 1px rgba(255,215,50,0.18), 0 0 8px rgba(255,215,50,0.15);
+}
+
+/* ── Render mode list (more modes) ─────────────────────────────────────────── */
+.modeList {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+/* ── Layer list (Blender-style multi-select) ──────────────────────────────── */
+.modeSectionLabel {
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin: 4px 0 5px;
+  opacity: 0.7;
+}
+.layerHint {
+  font-size: 8px;
+  color: var(--accent-orange);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.layerList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.layerGroup {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+/* Horizontal counterpart to .gizmoDivider — same color/weight, adapted to
+   separate stacked groups instead of a row of icons. */
+.layerGroupDivider {
+  height: 1px; background: rgba(255,255,255,0.1);
+  margin: 0 2px;
+}
+.layerBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px;
+  border: 1px solid var(--btn-border);
+  border-radius: var(--r-sm);
+  background: var(--btn-bg);
+  color: var(--text-dim);
+  font-size: 9.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color .12s, border-color .12s, background .12s;
+  text-align: left;
+  line-height: 1.2;
+}
+.layerBtn svg {
+  flex-shrink: 0;
+  width: 12px; height: 12px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+.layerBtn:hover {
+  color: var(--text-1);
+  border-color: rgba(255,255,255,0.22);
+  background: rgba(28,32,44,0.92);
+}
+.layerBtn.active {
+  color: var(--accent-orange);
+  border-color: rgba(255,177,74,0.65);
+  background: rgba(255,177,74,0.12);
+}
+.layerBtn.active svg {
+  stroke: var(--accent-orange);
+}
+
+/* ── Visualization sub-mode panel ──────────────────────────────────────────── */
+.visModePanel {
+  margin-bottom: 8px;
+}
+.visModeGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-top: 6px;
+}
+.visModeBtn {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 3px;
+  padding: 7px 4px;
+  border: 1px solid var(--btn-border);
+  border-radius: var(--r-sm);
+  background: var(--btn-bg);
+  color: var(--text-dim);
+  font-size: var(--fs-2xs); font-family: inherit;
+  cursor: pointer;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.visModeBtn svg {
+  width: 14px; height: 14px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round;
+}
+.visModeBtn:hover {
+  color: var(--text-1);
+  border-color: rgba(255,255,255,0.22);
+  background: rgba(28,32,44,0.92);
+}
+.visModeBtn.active {
+  color: var(--accent-orange);
+  border-color: rgba(255,177,74,0.7);
+  background: rgba(255,177,74,0.1);
+}
+
+/* ── Sample counter (top bar) ──────────────────────────────────────────────── */
+/* ── Shared utils ──────────────────────────────────────────────────────────── */
+.hidden { display: none !important; }
+
+.uiBtn {
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--text-1);
+  cursor: pointer;
+  display: grid; place-items: center; padding: 0;
+}
+
+/* ── Panel toggle button (1/2→ / 2/1→) ─────────────────────────────────────── */
+#panelToggleBtn {
+  font-size: var(--fs-sm); font-weight: 700; letter-spacing: .02em;
+  padding: 0 9px; height: 30px;
+  border: 1px solid var(--btn-border);
+  border-radius: var(--r-sm);
+  background: var(--btn-bg);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color .12s, border-color .12s, background .12s, box-shadow .12s;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+#panelToggleBtn:hover {
+  color: var(--text-1);
+  border-color: rgba(255,255,255,0.22);
+  background: rgba(28,32,44,0.92);
+}
+#panelToggleBtn.active {
+  color: var(--accent-orange);
+  border-color: rgba(255,177,74,0.7);
+  background: rgba(255,177,74,0.10);
+  box-shadow: 0 0 0 1px rgba(255,177,74,0.18), 0 0 8px rgba(255,177,74,0.12);
+}
+
+/* ── Config section ──────────────────────────────────────────────────────────── */
+#configSection {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+#configSection.hidden { display: none; }
+
+.cfgGroup {
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: var(--r-sm);
+  padding: 10px;
+  background: rgba(255,255,255,0.02);
+}
+
+.cfgGroupTitle {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.45);
+  margin-bottom: 10px;
+}
+.cfgGroupTitle svg {
+  width: 12px; height: 12px; flex-shrink: 0;
+  stroke: currentColor; fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+.cfgBtnStack {
+  display: flex; flex-direction: column; gap: 5px;
+}
+
+.cfgBtn {
+  display: flex; align-items: center; gap: 7px;
+  width: 100%; padding: 7px 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--r-sm);
+  background: rgba(255,255,255,0.03);
+  color: rgba(238,242,255,0.75);
+  font-size: var(--fs-md); font-weight: 500;
+  cursor: pointer; text-align: left;
+  transition: background .13s, border-color .13s, color .13s;
+}
+.cfgBtn svg {
+  width: 14px; height: 14px; flex-shrink: 0;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.cfgBtn:hover {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.16);
+  color: var(--text-1);
+}
+.cfgBtnAccent {
+  border-color: rgba(255,177,74,0.3);
+  color: #ffb14a;
+  background: rgba(255,177,74,0.06);
+}
+.cfgBtnAccent:hover {
+  background: rgba(255,177,74,0.12);
+  border-color: rgba(255,177,74,0.55);
+  color: var(--accent-orange);
+}
+.cfgBtnDanger {
+  border-color: rgba(220,60,60,0.25);
+  color: rgba(255,120,120,0.8);
+}
+.cfgBtnDanger:hover {
+  background: rgba(220,60,60,0.1);
+  border-color: rgba(220,60,60,0.5);
+  color: #ff7878;
+}
+
+/* Color picker row */
+.cfgRow { display: flex; align-items: center; gap: 8px; }
+
+.cfgColorLabel {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer;
+  font-size: var(--fs-md); color: rgba(238,242,255,0.7);
+}
+.cfgColorLabel input[type="color"] {
+  width: 32px; height: 32px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--r-sm);
+  background: none; cursor: pointer; padding: 2px;
+}
+
+/* ── Right panel header with undo/redo ──────────────────────────────────────── */
+.rightPanelActions {
+  display: flex; align-items: center; gap: 4px;
+}
+
+.undoRedoBtn {
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  border: 1px solid var(--btn-border);
+  border-radius: var(--r-sm);
+  background: var(--btn-bg);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.undoRedoBtn svg {
+  width: 12px; height: 12px;
+  stroke: currentColor; fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.undoRedoBtn:hover:not(:disabled) {
+  color: var(--text-1); border-color: rgba(255,255,255,0.22);
+  background: rgba(28,32,44,0.92);
+}
+.undoRedoBtn:disabled { opacity: var(--state-disabled-opacity); cursor: not-allowed; }
+
+/* #simSection removed — replaced by Particle Labs (#labsSection) */
+
+.simSelect {
+  width: 100%; padding: 6px 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--r-sm);
+  color: rgba(238,242,255,0.85);
+  font-size: var(--fs-md); font-family: inherit;
+  cursor: pointer;
+}
+.simSelect:focus { outline: none; border-color: rgba(120,180,255,0.4); }
+
+.simParamRow {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 3px 0;
+  font-size: 11.5px; color: rgba(238,242,255,0.65);
+}
+.simParamRow span { flex-shrink: 0; }
+.simParamRow input[type="number"],
+.simParamRow select {
+  width: 90px; padding: 4px 6px; text-align: right;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--r-xs); color: rgba(238,242,255,0.85);
+  font-size: 11.5px; font-family: inherit;
+}
+.simCheckRow input[type="checkbox"] { width: auto; cursor: pointer; }
+
+.simCtrlRow {
+  display: flex; gap: 4px;
+}
+.simCtrlRow .cfgBtn { flex: 1; justify-content: center; }
+
+.simNoParams {
+  font-size: var(--fs-sm); color: rgba(255,255,255,0.3);
+  text-align: center; padding: 6px 0; margin: 0;
+}
+
+/* Active play button */
+#simPlayBtn.active  { color: #78ff9a; border-color: rgba(120,255,154,0.5); background: rgba(120,255,154,0.08); }
+#simStopBtn.active  { color: #ff7878; border-color: rgba(255,120,120,0.5); background: rgba(255,120,120,0.08); }
+
+/* ── Texture button state indicator ─────────────────────────────────────────── */
+.textureBtn { position: relative; }
+.textureBtn.hasTexture {
+  border-color: rgba(120,220,120,0.5);
+  color: #7de87d;
+}
+.texDot {
+  position: absolute; top: 4px; right: 4px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #7de87d;
+  box-shadow: 0 0 4px rgba(120,220,120,0.8);
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PARTICLE LABS — Right panel integration
+   Mirrors the left panel structure: category tabs at top, content below
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Labs section wrapper ────────────────────────────────────────── */
+#labsSection {
+  --text-dim: rgba(150,150,162,0.6); /* see #labsLeftPanel — same darker Labs-only gray */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+#labsSection.hidden { display: none; }
+
+/* ── Category buttons row — mirrors #leftPanelButtons ────────────── */
+#labsCategoryBtns {
+  display: flex;
+  border-bottom: 1px solid var(--panel-border);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+#labsCategoryBtns::-webkit-scrollbar { display: none; }
+
+.labsCatBtn {
+  flex: 1;
+  min-width: 44px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border: none;
+  border-right: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color .15s, background .15s;
+  font-size: 8.5px; letter-spacing: 0.2px;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.labsCatBtn:last-child { border-right: none; }
+.labsCatBtn svg {
+  width: 15px; height: 15px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  flex-shrink: 0;
+}
+.labsCatBtn:hover { color: var(--text-1); background: rgba(255,255,255,0.04); }
+.labsCatBtn.active {
+  color: #a78bfa;
+  background: rgba(167,139,250,0.08);
+  border-bottom: 2px solid #a78bfa;
+}
+
+/* ── Category content area ───────────────────────────────────────── */
+#labsCategoryContent {
+  flex: 1;
+  display: flex; flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Each sub-panel ──────────────────────────────────────────────── */
+.labsSubPanel {
+  flex: 1;
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  min-height: 0;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(167,139,250,.15) transparent;
+}
+.labsSubPanel.hidden { display: none !important; }
+.labsSubPanel::-webkit-scrollbar { width: 3px; }
+.labsSubPanel::-webkit-scrollbar-track { background: transparent; }
+.labsSubPanel::-webkit-scrollbar-thumb { background: rgba(167,139,250,.2); border-radius: var(--r-xs); }
+
+/* ── Particles list panel ────────────────────────────────────────── */
+.labs-panel-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--panel-border);
+  font-size: 10.5px; font-weight: 700;
+  color: rgba(255,255,255,0.4);
+  flex-shrink: 0;
+}
+.labs-panel-header svg { flex-shrink: 0; }
+.labs-header-add-btn {
+  margin-left: auto;
+  width: 20px; height: 20px;
+  background: rgba(167,139,250,0.14);
+  border: 1px solid rgba(167,139,250,0.3);
+  border-radius: var(--r-xs);
+  color: #a78bfa;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .13s;
+}
+.labs-header-add-btn:hover { background: rgba(167,139,250,.25); }
+
+.labs-particles-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+  min-height: 60px;
+  max-height: 180px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(167,139,250,.2) transparent;
+}
+.labs-plist-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 7px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background .12s;
+  border: 1px solid transparent;
+}
+.labs-plist-item:hover { background: rgba(255,255,255,.05); }
+.labs-plist-item.active {
+  background: rgba(167,139,250,.12);
+  border-color: rgba(167,139,250,.3);
+}
+.labs-plist-icon { width: 14px; height: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #a78bfa; }
+.labs-plist-icon .pi-icon { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.labs-plist-name { flex: 1; font-size: var(--fs-xs); color: #e8e8e8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.labs-plist-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.labs-plist-play, .labs-plist-del {
+  width: 18px; height: 18px;
+  background: rgba(14,16,32,.8);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: var(--r-xs);
+  color: rgba(160,160,200,.5);
+  font-size: var(--fs-2xs); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .12s;
+}
+.labs-plist-play:hover { color: #a78bfa; border-color: rgba(167,139,250,.4); }
+.labs-plist-del:hover  { color: #fca5a5; border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.07); }
+.labs-plist-play .pi-icon, .labs-plist-del .pi-icon { width: 10px; height: 10px; }
+.labs-plist-empty { padding: 14px 8px; font-size: var(--fs-xs); color: rgba(160,160,200,.3); text-align: center; }
+
+.labs-list-actions {
+  padding: 5px;
+  border-top: 1px solid rgba(255,255,255,.06);
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  display: flex; flex-direction: column; gap: 3px;
+  flex-shrink: 0;
+}
+.labs-file-ops {
+  padding: 5px;
+  display: flex; flex-direction: column; gap: 3px;
+  flex-shrink: 0;
+}
+
+/* ── Hierarchy panel ─────────────────────────────────────────────── */
+.labs-hierarchy-header {
+  display: flex;
+  flex-direction: column;
+}
+.lab-hierarchy-selected {
+  padding: 6px 8px 8px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lab-hierarchy-selected.hidden { display: none; }
+.lab-hierarchy-select-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(167,139,250,.25);
+  background: rgba(167,139,250,.08);
+  color: #f3edff;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.lab-hierarchy-select-badge {
+  flex-shrink: 0;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #c4b5fd;
+  background: rgba(167,139,250,.14);
+  border: 1px solid rgba(167,139,250,.28);
+  border-radius: 999px;
+  padding: 2px 6px;
+}
+.lab-hierarchy-selected-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lab-hierarchy-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.lab-hierarchy-actions .labs-action-btn {
+  flex: 1;
+  min-width: 88px;
+  height: 26px;
+  padding: 0 8px;
+  justify-content: center;
+}
+.labs-hierarchy-tree {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 6px 10px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(167,139,250,.2) transparent;
+}
+.labs-hierarchy-empty {
+  padding: 14px 8px;
+  font-size: var(--fs-xs);
+  color: rgba(160,160,200,.35);
+  text-align: center;
+}
+.labs-hnode {
+  padding-left: calc(var(--depth, 0) * 12px);
+  margin-bottom: 6px;
+}
+.labs-hnode-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.labs-hnode-select {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+  color: rgba(240,240,245,.95);
+  cursor: pointer;
+  text-align: left;
+  transition: all .12s;
+}
+.labs-hnode-select:hover {
+  background: rgba(255,255,255,.06);
+  border-color: rgba(167,139,250,.24);
+}
+.labs-hnode.active .labs-hnode-select {
+  background: rgba(167,139,250,.12);
+  border-color: rgba(167,139,250,.35);
+}
+.labs-hnode-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #a78bfa;
+}
+.labs-hnode-icon .pi-icon {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.labs-hnode-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.labs-hnode-count {
+  flex-shrink: 0;
+  min-width: 16px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 700;
+  color: #d9cfff;
+  background: rgba(167,139,250,.12);
+  border: 1px solid rgba(167,139,250,.22);
+  text-align: center;
+}
+.labs-hnode-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.labs-hnode-add, .labs-hnode-root {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+  color: rgba(230,230,240,.85);
+  cursor: pointer;
+  transition: all .12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-md);
+  line-height: 1;
+}
+.labs-hnode-add:hover { border-color: rgba(74,222,128,.35); color: #8ff0b0; background: rgba(74,222,128,.08); }
+.labs-hnode-root:hover { border-color: rgba(167,139,250,.35); color: #dccbff; background: rgba(167,139,250,.08); }
+.labs-hnode-children {
+  margin-top: 6px;
+}
+
+/* ── Action buttons ──────────────────────────────────────────────── */
+.labs-action-btn {
+  display: flex; align-items: center; gap: 5px;
+  width: 100%; padding: 5px 8px;
+  background: rgba(33,33,33,.9);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: var(--r-xs);
+  color: rgba(160,160,200,.7);
+  font-size: var(--fs-xs); font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  transition: all .13s; text-align: left;
+}
+.labs-action-btn:hover { background: rgba(51,51,51,.9); border-color: rgba(255,255,255,.18); color: #e8e8e8; }
+.labs-action-preview { background: rgba(167,139,250,.12); border-color: rgba(167,139,250,.3); color: #a78bfa; }
+.labs-action-preview:hover { background: rgba(167,139,250,.22); border-color: rgba(167,139,250,.5); }
+.labs-next-page-btn { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; background: rgba(167,139,250,.1); border-color: rgba(167,139,250,.28); color: #c9b8fd; }
+.labs-next-page-btn:hover { background: rgba(167,139,250,.2); border-color: rgba(167,139,250,.5); }
+.labs-page2-hint { font-size: var(--fs-2xs); color: rgba(255,255,255,.45); line-height: 1.4; padding: 4px 2px 8px; }
+
+/* ── Life Curves editor (Page 2 "Animation") ── */
+.curve-editor { padding-bottom: 4px; }
+.curve-point-list { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+.curve-point-row { display: flex; align-items: center; gap: 5px; }
+.curve-point-time, .curve-point-value { flex: 1; min-width: 0; }
+.curve-point-color { width: 30px; height: 26px; padding: 0; border: 1px solid rgba(255,255,255,.12); border-radius: var(--r-xs); background: rgba(26,26,26,.9); flex-shrink: 0; }
+.curve-point-del {
+  flex-shrink: 0; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  background: rgba(252,165,165,.08); border: 1px solid rgba(252,165,165,.2); border-radius: var(--r-xs);
+  color: rgba(252,165,165,.7); cursor: pointer;
+}
+.curve-point-del:hover:not(:disabled) { background: rgba(252,165,165,.18); }
+.curve-point-del:disabled { opacity: .3; cursor: not-allowed; }
+.curve-add-btn {
+  width: 100%; padding: 5px; margin-top: 2px;
+  background: rgba(245,158,11,.08); border: 1px dashed rgba(245,158,11,.3); border-radius: var(--r-xs);
+  color: rgba(245,158,11,.85); font-size: var(--fs-2xs); font-weight: 700; cursor: pointer; font-family: inherit;
+}
+.curve-add-btn:hover { background: rgba(245,158,11,.16); border-color: rgba(245,158,11,.5); }
+.labs-action-danger { color: rgba(252,165,165,.65); }
+.labs-action-danger:hover { background: rgba(239,68,68,.08); border-color: rgba(239,68,68,.3); color: #fca5a5; }
+
+/* ── Property panel rows ─────────────────────────────────────────── */
+.lab-no-sel {
+  padding: 20px 10px;
+  font-size: var(--fs-xs);
+  color: rgba(160,160,200,.3);
+  text-align: center;
+}
+.lab-props { padding: 0 4px; }
+.lab-row {
+  padding: 4px 5px;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.lab-row label {
+  font-size: 9.5px;
+  color: rgba(160,160,200,.6);
+  font-weight: 500;
+}
+.lab-num-input {
+  width: 100%; box-sizing: border-box;
+  background: rgba(33,33,33,.9);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: var(--r-xs);
+  padding: 4px 7px;
+  color: #e8e8e8; font-family: inherit; font-size: 10.5px; outline: none;
+  text-align: right;
+}
+.lab-num-input:focus { border-color: rgba(167,139,250,.5); background: rgba(33,33,33,1); }
+.lab-num-wrap { display: flex; align-items: center; gap: 5px; }
+.lab-num-wrap .lab-num-input { flex: 1; }
+.lab-num-suffix { font-size: 9px; font-weight: 700; color: rgba(167,139,250,.7); flex-shrink: 0; width: 12px; }
+.pi-icon { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: inline-block; vertical-align: middle; }
+.lab-text-input {
+  width: 100%; box-sizing: border-box;
+  background: rgba(33,33,33,.9);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: var(--r-xs);
+  padding: 4px 7px;
+  color: #e8e8e8; font-family: inherit; font-size: 10.5px; outline: none;
+}
+.lab-text-input:focus { border-color: rgba(255,255,255,.25); }
+
+/* ── Seg buttons ─────────────────────────────────────────────────── */
+.lab-seg { display: flex; flex-wrap: wrap; gap: 2px; }
+.lab-seg-btn {
+  font-size: var(--fs-2xs); font-weight: 600; padding: 2px 6px;
+  background: rgba(14,16,32,.7);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: var(--r-xs); color: rgba(160,160,200,.6);
+  cursor: pointer; transition: all .12s;
+}
+.lab-seg-btn:hover { background: rgba(51,51,51,.9); color: #e8e8e8; }
+.lab-seg-btn.lab-seg-on { background: rgba(167,139,250,.14); border-color: rgba(167,139,250,.4); color: #a78bfa; }
+
+/* ── Canvas widgets ──────────────────────────────────────────────── */
+
+/* ── Preset picker overlay ───────────────────────────────────────── */
+.labs-preset-picker {
+  position: fixed; inset: 0; z-index: 13000;
+  background: rgba(0,0,0,.65); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+}
+.labs-preset-picker.hidden { display: none !important; }
+.labs-preset-picker-inner {
+  background: rgba(8,10,22,.98);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 6px;
+  width: min(460px, 94vw); max-height: 82vh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,.85);
+}
+.labs-preset-picker-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  font-size: var(--fs-md); font-weight: 700; color: #a78bfa;
+}
+.labs-xbtn {
+  width: 26px; height: 26px;
+  background: rgba(14,16,32,.8);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: var(--r-sm); color: rgba(255,255,255,.4);
+  cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .12s;
+}
+.labs-xbtn:hover { color: #e8e8e8; border-color: rgba(255,255,255,.25); }
+
+/* ══════════════════════════════════════════════════════════════════
+   "Visualizar Partícula" — exclusive fullscreen viewer (spec #10-13).
+   Hides every other UI element via one body-level rule so nothing new
+   has to be enumerated as features grow — panel/toolbar/timeline/menus/
+   gizmos all disappear, leaving only the live 3D canvas plus these two
+   overlay elements. The canvas and its render loop are never touched.
+   ══════════════════════════════════════════════════════════════════ */
+body.labs-preview-mode #topBar,
+body.labs-preview-mode #leftPanel,
+body.labs-preview-mode #labsLeftPanel,
+body.labs-preview-mode #rightPanel,
+body.labs-preview-mode #bottomBar,
+body.labs-preview-mode .fp,
+body.labs-preview-mode #bonePanelContainer,
+body.labs-preview-mode #settingsMenu,
+body.labs-preview-mode #settingsMenuBackdrop,
+body.labs-preview-mode .animConfirmBackdrop,
+body.labs-preview-mode .animConfirmModal,
+body.labs-preview-mode .labs-preset-picker,
+body.labs-preview-mode .labsIconMenu,
+body.labs-preview-mode .labsIconMenuBackdrop {
+  display: none !important;
+}
+.labsPreviewOverlay {
+  position: fixed; inset: 0; z-index: 20000;
+  pointer-events: none; /* let the canvas underneath keep receiving touch/mouse */
+}
+.labsPreviewOverlay.hidden { display: none !important; }
+.labsPreviewCounter {
+  position: absolute; left: 14px; bottom: 14px;
+  padding: 6px 10px;
+  background: rgba(8,10,22,.72); backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,.12); border-radius: var(--r-sm);
+  font-size: var(--fs-xs); font-weight: 700; color: rgba(255,255,255,.85);
+  letter-spacing: .01em; font-variant-numeric: tabular-nums;
+}
+.labsPreviewCounter span { color: #a78bfa; }
+.labsPreviewCloseBtn {
+  position: absolute; right: 14px; top: 14px;
+  pointer-events: auto;
+  width: 34px; height: 34px; font-size: 15px;
+  background: rgba(8,10,22,.72); backdrop-filter: blur(6px);
+}
+
+/* ── Labs icon menu (spec #9) — small dropdown under the top-bar button ── */
+.labsIconMenuBackdrop { position: fixed; inset: 0; z-index: 13400; background: transparent; }
+.labsIconMenuBackdrop.hidden { display: none !important; }
+.labsIconMenu {
+  position: fixed; top: 44px; right: 10px; z-index: 13500;
+  min-width: 190px;
+  background: rgba(8,10,22,.98);
+  border: 1px solid rgba(167,139,250,.25); border-radius: var(--r-sm);
+  box-shadow: 0 14px 40px rgba(0,0,0,.6);
+  padding: 5px; display: flex; flex-direction: column; gap: 2px;
+}
+.labsIconMenu.hidden { display: none !important; }
+.labsIconMenuItem {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 9px; background: none; border: none; border-radius: var(--r-xs);
+  color: rgba(230,230,245,.85); font-size: var(--fs-sm); font-family: inherit;
+  cursor: pointer; text-align: left; width: 100%;
+}
+.labsIconMenuItem svg { color: #a78bfa; flex-shrink: 0; }
+.labsIconMenuItem:hover { background: rgba(167,139,250,.14); }
+.labsIconMenuItem:active { transform: scale(.98); }
+.labs-preset-cats {
+  display: flex; gap: 4px; padding: 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  flex-wrap: wrap;
+}
+.labs-preset-cat-btn {
+  font-size: var(--fs-xs); font-weight: 600; padding: 3px 10px;
+  background: rgba(33,33,33,.9); border: 1px solid rgba(255,255,255,.1);
+  border-radius: var(--r-xs); color: rgba(160,160,200,.6);
+  cursor: pointer; transition: all .12s;
+}
+.labs-preset-cat-btn:hover { background: rgba(51,51,51,.9); color: #e8e8e8; }
+.labs-preset-cat-btn.active { background: rgba(167,139,250,.14); border-color: rgba(167,139,250,.4); color: #a78bfa; }
+.labs-preset-list {
+  flex: 1; overflow-y: auto; padding: 8px;
+  display: flex; flex-wrap: wrap; gap: 6px;
+  align-content: flex-start;
+}
+.labs-preset-item {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  width: 80px; padding: 8px 4px;
+  background: rgba(33,33,33,.9); border: 1px solid rgba(255,255,255,.08);
+  border-radius: var(--r-sm); cursor: pointer; transition: all .14s;
+  font-size: 9.5px; color: rgba(160,160,200,.7);
+  text-align: center;
+}
+.labs-preset-item:hover { background: rgba(167,139,250,.1); border-color: rgba(167,139,250,.35); color: #e8e8e8; }
+.labs-preset-icon { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; margin: 0 auto; color: #c4b5fd; }
+.labs-preset-icon .pi-icon { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   BOTTOM BAR — scene stats, selected object coords, render mode
+   ═══════════════════════════════════════════════════════════════════ */
+
+#bottomBar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: var(--bar-h-bot);
+  z-index: 100;
+  pointer-events: none;
+  display: flex; flex-direction: column-reverse;
+}
+
+#bottomBar .bottomBarContent {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  gap: 8px;
+  height: 100%;
+}
+
+/* ── Left section ── */
+#bbLeft {
+  display: flex; align-items: center; gap: 5px;
+  flex: 1; min-width: 0; overflow: hidden;
+}
+.bbObjName {
+  font-size: 10.5px; font-weight: 600;
+  color: rgba(238,242,255,0.65);
+  max-width: 90px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+  flex-shrink: 0;
+}
+.bbCoordLabel       { font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .06em; color: rgba(238,242,255,0.28); flex-shrink: 0; }
+.bbCoordLabel.bbCX  { color: rgba(255,100,100,.65); }
+.bbCoordLabel.bbCY  { color: rgba(100,220,100,.65); }
+.bbCoordLabel.bbCZ  { color: rgba(100,160,255,.65); }
+.bbCoordVal {
+  font-size: var(--fs-xs); font-family: var(--font-mono);
+  color: var(--text-dim);
+  min-width: 38px; text-align: right;
+  flex-shrink: 0;
+}
+.bbDivider {
+  width: 1px; height: 14px;
+  background: rgba(255,255,255,0.1);
+  flex-shrink: 0; margin: 0 3px;
+}
+
+/* ── Center section ── */
+#bbCenter {
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0;
+}
+.bbStat {
+  display: flex; align-items: center; gap: 3px;
+  font-size: var(--fs-xs);
+  color: rgba(238,242,255,0.38);
+}
+.bbStat svg {
+  width: 11px; height: 11px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  flex-shrink: 0; opacity: .65;
+}
+
+/* ── Right section ── */
+#bbRight {
+  display: flex; align-items: center; gap: 5px;
+  flex-shrink: 0;
+}
+.bbBadge {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .05em;
+  padding: 2px 7px;
+  background: rgba(33,36,50,.9);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: var(--r-xs);
+  color: rgba(238,242,255,.5);
+  transition: background .2s, color .2s, border-color .2s;
+}
+.bbBadge.render {
+  background: rgba(255,177,74,.1);
+  border-color: rgba(255,177,74,.35);
+  color: #ffb14a;
+}
+.bbBadge.labs {
+  background: rgba(167,139,250,.1);
+  border-color: rgba(167,139,250,.35);
+  color: #a78bfa;
+}
+.bbFps {
+  font-size: var(--fs-xs); font-family: var(--font-mono);
+  color: rgba(238,242,255,.3);
+  min-width: 44px; text-align: right;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CONFIG TABS (Cena / Grid)
+   ═══════════════════════════════════════════════════════════════════ */
+#cfgTabBar {
+  display: flex;
+  border-bottom: 1px solid var(--panel-border);
+  flex-shrink: 0;
+}
+.cfgTabBtn {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 9px 4px;
+  background: transparent;
+  border: none; border-right: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  font-size: 10.5px; font-weight: 600; font-family: inherit;
+  cursor: pointer; transition: color .13s, background .13s;
+}
+.cfgTabBtn:last-child { border-right: none; }
+.cfgTabBtn svg {
+  width: 13px; height: 13px; stroke: currentColor; fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0;
+}
+.cfgTabBtn:hover { color: var(--text-1); background: rgba(255,255,255,.04); }
+.cfgTabBtn.active { color: #a78bfa; border-bottom: 2px solid #a78bfa; }
+.cfgTabContent { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0; }
+.cfgTabContent.hidden { display: none !important; }
+
+/* ── Config section scroll wrapper ── */
+#configSection {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+#configSection.hidden { display: none; }
+
+/* Grid tab specific */
+.cfgToggleRow {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 0; gap: 8px;
+  font-size: 10.5px; color: rgba(220,220,240,.7);
+}
+.cfgToggle { display: flex; align-items: center; cursor: pointer; flex-shrink: 0; }
+.cfgToggle input { display: none; }
+.cfgToggleTrack {
+  width: 32px; height: 17px;
+  background: rgba(255,255,255,.08); border-radius: var(--r-sm);
+  position: relative; transition: background .18s;
+}
+.cfgToggleTrack::after {
+  content: ''; position: absolute;
+  width: 13px; height: 13px;
+  background: rgba(255,255,255,.4); border-radius: 50%;
+  top: 2px; left: 2px; transition: transform .18s, background .18s;
+}
+.cfgToggle input:checked + .cfgToggleTrack { background: rgba(167,139,250,.5); }
+.cfgToggle input:checked + .cfgToggleTrack::after { transform: translateX(15px); background: #a78bfa; }
+
+.cfgGridPresets {
+  display: flex; gap: 4px; flex-wrap: wrap; margin-top: 5px;
+}
+.cfgGridPresetBtn {
+  padding: 3px 10px; font-size: var(--fs-xs); font-weight: 700;
+  background: rgba(33,33,33,.9); border: 1px solid rgba(255,255,255,.1);
+  border-radius: var(--r-xs); color: rgba(160,160,200,.6); cursor: pointer;
+  transition: all .12s;
+}
+.cfgGridPresetBtn:hover { background: rgba(51,51,51,.9); color: #e8e8e8; }
+.cfgGridPresetBtn.active { background: rgba(167,139,250,.14); border-color: rgba(167,139,250,.4); color: #a78bfa; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   INFO SECTION — right panel
+   ═══════════════════════════════════════════════════════════════════ */
+#infoSection {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden;
+}
+#infoSection.hidden { display: none; }
+
+.infoBack {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-bottom: 1px solid var(--panel-border);
+  flex-shrink: 0;
+}
+.infoBackBtn {
+  display: flex; align-items: center; gap: 3px;
+  background: rgba(33,33,33,.9); border: 1px solid rgba(255,255,255,.1);
+  border-radius: var(--r-xs); padding: 4px 8px;
+  color: rgba(160,160,200,.7); font-size: var(--fs-xs); font-weight: 600;
+  cursor: pointer; font-family: inherit; transition: all .12s; flex-shrink: 0;
+}
+.infoBackBtn svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2.5; }
+.infoBackBtn:hover { color: var(--text-1); border-color: rgba(255,255,255,.25); }
+.infoObjLabel {
+  font-size: var(--fs-sm); font-weight: 700; color: var(--text-1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.infoScroll {
+  flex: 1; overflow-y: auto; padding: 6px 8px 12px;
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.1) transparent;
+}
+.infoTypeRow {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding-top: 2px;
+}
+.infoTypeBadge {
+  font-size: var(--fs-xs); font-weight: 700; padding: 2px 8px;
+  background: rgba(167,139,250,.12); border: 1px solid rgba(167,139,250,.3);
+  border-radius: var(--r-xs); color: #a78bfa;
+}
+.infoGroup {
+  background: rgba(255,255,255,.02);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: var(--r-sm); padding: 8px 10px; margin-bottom: 6px;
+}
+.infoGroupTitle {
+  font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+  color: rgba(255,255,255,.22); margin-bottom: 7px;
+}
+.infoXYZBlock { margin-bottom: 6px; }
+.infoXYZLabel { font-size: 9.5px; color: rgba(160,160,200,.45); margin-bottom: 3px; }
+.infoXYZRow {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: var(--fs-sm);
+}
+.infoXAxis { color: rgba(255,100,100,.7); font-weight: 700; font-size: 9.5px; }
+.infoYAxis { color: rgba(100,220,100,.7); font-weight: 700; font-size: 9.5px; }
+.infoZAxis { color: rgba(100,160,255,.7); font-weight: 700; font-size: 9.5px; }
+.infoXYZVal { color: rgba(230,230,255,.8); min-width: 44px; }
+.infoStatGrid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
+}
+.infoStat { display: flex; flex-direction: column; gap: 1px; }
+.infoStatLbl { font-size: var(--fs-2xs); color: rgba(160,160,200,.4); }
+.infoStatVal { font-size: var(--fs-sm); font-family: var(--font-mono); color: rgba(220,220,255,.8); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   CONTEXT MENU + LONG-PRESS RING
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Ripple countdown ring */
+.ctx-ring {
+  position: fixed;
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 99998;
+  transform: translate(-50%, -50%);
+  border: 2.5px solid rgba(167,139,250,0);
+  box-shadow: 0 0 0 0 rgba(167,139,250,0.5);
+  transition: none;
+}
+.ctx-ring.active {
+  animation: ctxRingPulse 4s linear forwards;
+}
+.ctx-ring.hidden { display: none; }
+@keyframes ctxRingPulse {
+  0%   { border-color: rgba(167,139,250,.15); box-shadow: 0 0 0 0 rgba(167,139,250,.4); transform: translate(-50%,-50%) scale(0.5); opacity: 1; }
+  80%  { border-color: rgba(167,139,250,.8);  box-shadow: 0 0 18px 4px rgba(167,139,250,.3); transform: translate(-50%,-50%) scale(1.15); opacity: 1; }
+  100% { border-color: rgba(167,139,250,1);   box-shadow: 0 0 28px 8px rgba(167,139,250,.5); transform: translate(-50%,-50%) scale(1.3); opacity: 0; }
+}
+
+/* Context menu card */
+.ctx-menu {
+  position: fixed;
+  z-index: 99999;
+  pointer-events: auto;
+  filter: drop-shadow(0 8px 32px rgba(0,0,0,.7));
+  transform: scale(0.88);
+  opacity: 0;
+  transition: transform .18s cubic-bezier(.34,1.56,.64,1), opacity .15s ease;
+}
+.ctx-menu.visible {
+  transform: scale(1);
+  opacity: 1;
+}
+.ctx-menu.hidden { display: none !important; }
+.ctx-menu-inner {
+  background: rgba(10,12,26,.97);
+  border: 1px solid rgba(167,139,250,.25);
+  border-radius: 4px;
+  min-width: 160px;
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+}
+.ctx-obj-title {
+  padding: 9px 14px 6px;
+  font-size: var(--fs-xs); font-weight: 700; color: rgba(167,139,250,.7);
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  letter-spacing: .04em; text-transform: uppercase;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ctx-menu-item {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; padding: 11px 14px;
+  background: transparent; border: none;
+  color: rgba(220,220,255,.85);
+  font-size: var(--fs-md); font-weight: 500; font-family: inherit;
+  cursor: pointer; text-align: left;
+  transition: background .1s, color .1s;
+}
+.ctx-menu-item svg {
+  width: 15px; height: 15px; stroke: currentColor; fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0;
+}
+.ctx-menu-item:hover { background: rgba(167,139,250,.12); color: #fff; }
+.ctx-menu-item:active { background: rgba(167,139,250,.22); }
+
+/* ════════════════════════════════════════════════════════════════════
+   FLOAT PANEL — painel portátil que aparece com 2.5s de pressão
+   Totalmente reescrito: sem anel, sem ctxMenu, sem infoSection
+   ════════════════════════════════════════════════════════════════════ */
+
+.fp {
+  position: fixed;
+  z-index: 20000;
+  width: 234px;
+  background: rgba(8, 10, 22, 0.97);
+  border: 1px solid rgba(167, 139, 250, 0.25);
+  border-radius: 4px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04);
+  backdrop-filter: blur(16px);
+  overflow: hidden;
+  /* animation */
+  opacity: 0;
+  transform: scale(0.92) translateY(4px);
+  transition: opacity 0.17s ease, transform 0.17s ease;
+  pointer-events: none;
+}
+.fp.hidden       { display: none !important; }
+.fp.fp-in        { opacity: 1; transform: scale(1) translateY(0); pointer-events: auto; }
+.fp.fp-out       { opacity: 0; transform: scale(0.94) translateY(3px); pointer-events: none; }
+
+/* Header — drag zone */
+.fp-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 10px 8px;
+  background: rgba(167, 139, 250, 0.07);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.fp-header:active { cursor: grabbing; }
+.fp-title-group   { flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.fp-title {
+  font-size: var(--fs-sm); font-weight: 700;
+  color: var(--text-1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 110px;
+}
+.fp-type-badge {
+  font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .05em;
+  padding: 1px 6px;
+  background: rgba(167,139,250,0.15);
+  border: 1px solid rgba(167,139,250,0.35);
+  border-radius: var(--r-xs);
+  color: #a78bfa;
+  flex-shrink: 0;
+}
+.fp-close {
+  width: 22px; height: 22px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: var(--r-xs);
+  color: rgba(255,255,255,0.4);
+  font-size: var(--fs-md);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .12s, color .12s;
+  flex-shrink: 0;
+}
+.fp-close:hover { background: rgba(239,68,68,0.18); color: #fca5a5; border-color: rgba(239,68,68,.3); }
+
+/* Body */
+.fp-body    { padding: 0; }
+.fp-section { padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.fp-section:last-child { border-bottom: none; }
+
+/* Transform rows */
+.fp-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-bottom: 3px;
+  font-size: var(--fs-xs);
+}
+.fp-row:last-child { margin-bottom: 0; }
+.fp-lbl {
+  width: 24px;
+  font-size: 8.5px; font-weight: 700; letter-spacing: .05em;
+  color: rgba(238,242,255,0.28);
+  flex-shrink: 0;
+  text-align: right;
+}
+.fp-ax        { font-size: 8.5px; font-weight: 800; flex-shrink: 0; width: 9px; }
+.fp-ax-x      { color: rgba(255,100,100,.75); }
+.fp-ax-y      { color: rgba(100,220,100,.75); }
+.fp-ax-z      { color: rgba(100,160,255,.75); }
+.fp-v {
+  flex: 1;
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  text-align: right;
+  min-width: 44px;
+}
+
+/* Geometry / Material rows */
+.fp-geo     { background: rgba(0,0,0,0.18); }
+.fp-mat     { background: rgba(0,0,0,0.12); }
+.fp-geo-row {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 9.5px;
+  flex-wrap: wrap;
+  margin-bottom: 2px;
+}
+.fp-geo-row:last-child { margin-bottom: 0; }
+.fp-stat-l { color: rgba(238,242,255,0.3); font-size: 8.5px; }
+.fp-stat-v {
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  margin-right: 6px;
+}
+
+/* ── Bottom Bar — empty by default ─────────────────────────────── */
+.bb-hidden { display: none !important; }
+
+/* ── Remove old ctx-ring / ctx-menu CSS if still referenced ──── */
+.ctx-ring, .ctx-menu { display: none !important; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOP BAR RIGHT — Animate + Settings gear buttons
+   ═══════════════════════════════════════════════════════════════════ */
+
+#topBarRight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+  background: rgba(0,0,0,0.22);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 3px;
+}
+
+.topBarIconBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: var(--r-sm);
+  color: rgba(238,242,255,.6);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  font-family: inherit;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.topBarIconBtn svg {
+  width: 14px; height: 14px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  flex-shrink: 0;
+}
+.topBarIconBtn:hover {
+  background: rgba(255,255,255,.1);
+  border-color: rgba(255,255,255,.2);
+  color: var(--text-1);
+}
+.topBarIconBtn.active {
+  background: rgba(167,139,250,.15);
+  border-color: rgba(167,139,250,.45);
+  color: #a78bfa;
+}
+#animBtn.active {
+  background: rgba(76,239,172,.12);
+  border-color: rgba(76,239,172,.4);
+  color: #4cefac;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CAMERA PANEL — left panel tab
+   ═══════════════════════════════════════════════════════════════════ */
+
+#cameraPanel { padding: 0; }
+
+.camSection {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.camSection:last-child { border-bottom: none; }
+
+.camSectionTitle {
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--fs-xs); font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.35);
+  margin-bottom: 8px;
+}
+.camSectionTitle svg {
+  stroke: currentColor; fill: none;
+  stroke-width: 2; stroke-linecap: round;
+  flex-shrink: 0; opacity: .7;
+}
+
+.camPropRow {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 6px;
+}
+.camPropRow label {
+  font-size: var(--fs-xs); color: rgba(200,200,220,.55);
+  min-width: 72px; flex-shrink: 0;
+}
+.camPropRow input[type="range"] {
+  flex: 1; accent-color: #7edfff;
+}
+.camNum {
+  width: 42px; font-size: var(--fs-xs); font-family: monospace;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+  color: #ddd; border-radius: var(--r-xs);
+  padding: 2px 5px; text-align: right;
+  flex-shrink: 0;
+}
+.camNumFull {
+  flex: 1; font-size: var(--fs-xs); font-family: monospace;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+  color: #ddd; border-radius: var(--r-xs);
+  padding: 3px 7px;
+}
+
+/* ── Add camera button ── */
+.camAddBtn {
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 10px;
+  background: rgba(126,223,255,.08);
+  border: 1px solid rgba(126,223,255,.25);
+  border-radius: var(--r-sm);
+  color: #7edfff;
+  font-size: var(--fs-sm); font-weight: 600;
+  cursor: pointer; margin-bottom: 8px;
+  transition: all .15s;
+}
+.camAddBtn:hover { background: rgba(126,223,255,.16); border-color: rgba(126,223,255,.45); }
+.camAddBtn svg { stroke: currentColor; fill: none; flex-shrink: 0; }
+
+/* ── Camera list ── */
+.sceneCameraList {
+  display: flex; flex-direction: column; gap: 3px;
+  max-height: 200px; overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(126,223,255,.15) transparent;
+}
+.camListEmpty {
+  font-size: var(--fs-xs); color: rgba(200,200,220,.3);
+  text-align: center; padding: 12px 0;
+}
+.camListItem {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 6px; border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  transition: all .12s; cursor: default;
+}
+.camListItem:hover { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.07); }
+.camItemIcon {
+  width: 14px; height: 14px; flex-shrink: 0;
+  stroke: rgba(126,223,255,.6); fill: none;
+  stroke-width: 2; stroke-linecap: round;
+}
+.camItemName {
+  flex: 1; font-size: 10.5px; color: rgba(240,240,255,.75);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.camItemEnterBtn, .camItemDelBtn {
+  width: 22px; height: 22px; border-radius: var(--r-xs); flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.05);
+  cursor: pointer; font-size: var(--fs-xs);
+  display: flex; align-items: center; justify-content: center;
+  transition: all .12s;
+  color: rgba(200,200,220,.6);
+}
+.camItemEnterBtn:hover {
+  background: rgba(126,223,255,.15); border-color: rgba(126,223,255,.4);
+  color: #7edfff;
+}
+.camItemDelBtn:hover {
+  background: rgba(255,60,60,.12); border-color: rgba(255,80,80,.35);
+  color: #ff8888;
+}
+
+/* ── POV section ── */
+#camPovSection { background: rgba(126,223,255,.04); }
+.camPovBtns { display: flex; gap: 5px; margin-bottom: 6px; }
+.camPovBtn {
+  flex: 1; padding: 7px 10px; border-radius: var(--r-sm);
+  font-size: var(--fs-sm); font-weight: 600; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  transition: all .15s;
+}
+.camPovEnter {
+  background: rgba(126,223,255,.12);
+  border: 1px solid rgba(126,223,255,.35);
+  color: #7edfff;
+}
+.camPovEnter:hover { background: rgba(126,223,255,.22); border-color: rgba(126,223,255,.55); }
+.camPovExit {
+  background: rgba(255,160,60,.1);
+  border: 1px solid rgba(255,160,60,.35);
+  color: #ffb347;
+}
+.camPovExit:hover { background: rgba(255,160,60,.2); border-color: rgba(255,160,60,.55); }
+.camPovBtn svg { stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   SETTINGS MENU — real draggable game-style menu, always on top.
+   z-index 100000 beats every other overlay in the app (video export
+   at 99999, preset picker at 13000, timeline panels at 200-300).
+   ═══════════════════════════════════════════════════════════════════ */
+
+.settingsMenu {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%); /* centered by default; drag overrides via inline left/top */
+  width: 380px !important;   /* v2: bumped again + !important as a defensive guard —
+                                 no JS in this file ever sets an inline width, so if
+                                 this still doesn't look wider, the browser/server is
+                                 serving a stale cached copy of this file. */
+  max-width: 92vw;
+  max-height: min(82vh, 620px);
+  z-index: 100000;
+  pointer-events: auto;   /* ★ the fix: #topBar (its DOM parent) sets pointer-events:none
+                                to let clicks pass through to the 3D viewport, and only
+                                .barContent opts back in — this menu sits OUTSIDE
+                                .barContent, so without this line every click/drag inside
+                                it was silently swallowed while still rendering visibly. */
+  display: flex;
+  flex-direction: column;
+  background: #2b2b2b;              /* flat Blender-panel gray */
+  border: 1px solid #1a1a1a;
+  border-radius: var(--r-sm);
+  box-shadow: 0 16px 44px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.04);
+  overflow: hidden;
+  font-size: var(--fs-sm);
+}
+.settingsMenu.hidden { display: none !important; }
+
+.settingsMenuBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;             /* one below .settingsMenu (100000), above everything else */
+  background: rgba(0,0,0,.45);
+  backdrop-filter: blur(1.5px);
+  -webkit-backdrop-filter: blur(1.5px);
+}
+.settingsMenuBackdrop.hidden { display: none !important; }
+
+.settingsMenuHeader {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 8px;
+  background: #363636;
+  border-bottom: 1px solid #1a1a1a;
+  color: #ddd;
+  font-size: var(--fs-sm); font-weight: 700;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;               /* required so pointer drag works on touch too */
+  flex-shrink: 0;
+}
+.settingsMenuHeader:active { cursor: grabbing; }
+.settingsMenuHeader svg { flex-shrink: 0; opacity: .75; }
+.settingsMenuHeader span { flex: 1; }
+
+.settingsMenuClose {
+  width: 20px; height: 20px;
+  background: transparent;
+  border: none;
+  border-radius: var(--r-xs);
+  color: rgba(255,255,255,.4);
+  font-size: var(--fs-md);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .12s;
+}
+.settingsMenuClose:hover { background: rgba(255,80,80,.18); color: #ff8888; }
+
+/* ── Updates menu — small changelog card that appears once the splash
+   screen finishes hiding (see splash.js '_splashHidden' dispatch + the
+   wiring script near the end of index.html). Centered the same way as
+   .settingsMenu (fixed + top/left 50% + translate(-50%,-50%)); purely
+   informational, no backdrop, so it doesn't block interaction with the
+   app underneath. Dismissed with the ✕ (closes for the current session
+   only — reappears next launch). ──────────────────────────────────── */
+.ncmUpdatesMenu {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, calc(-50% - 8px)); /* same centering as .settingsMenu, plus a small slide-in offset while closed */
+  z-index: 100005;
+  width: 380px; /* same size as .settingsMenu, per request */
+  max-width: 92vw;
+  max-height: min(82vh, 620px);
+  overflow-y: auto;
+  background: #2b2b2b;
+  border: 1px solid #1a1a1a;
+  border-radius: var(--r-sm);
+  box-shadow: 0 16px 44px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.04);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s ease, transform .25s ease;
+}
+.ncmUpdatesMenu.ncmUpdatesOpen {
+  opacity: 1;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.ncmUpdatesHeader {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 8px 10px;
+  background: #363636;
+  border-bottom: 1px solid #1a1a1a;
+  border-top-left-radius: var(--r-sm);
+  border-top-right-radius: var(--r-sm);
+}
+.ncmUpdatesLabel {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  letter-spacing: var(--tr-eyebrow);
+  text-transform: uppercase;
+  color: var(--accent-amber); /* yellow, per request — same amber token used for other highlighted accents (loop toggle, active KF row, etc.) */
+}
+.ncmUpdatesClose {
+  width: 20px; height: 20px;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--r-xs);
+  color: rgba(255,255,255,.4);
+  font-size: var(--fs-md);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .12s;
+}
+.ncmUpdatesClose:hover { background: rgba(255,80,80,.18); color: #ff8888; }
+
+.ncmUpdatesList {
+  list-style: none;
+  margin: 0; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.ncmUpdatesList li {
+  display: flex; align-items: baseline; gap: 8px;
+}
+.ncmUpdatesBullet {
+  flex-shrink: 0;
+  color: var(--accent-amber);
+  font-size: var(--fs-md);
+  line-height: 1.4;
+}
+.ncmUpdatesText {
+  font-size: var(--fs-sm);
+  color: var(--text-1);
+  line-height: 1.4;
+}
+
+/* ── Anim mode activation confirm dialog ─────────────────────────────── */
+.animConfirmBackdrop {
+  position: fixed; inset: 0; z-index: 100010;
+  background: rgba(0,0,0,.5);
+  backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  pointer-events: auto;
+}
+.animConfirmBackdrop.hidden { display: none !important; }
+.animConfirmModal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  z-index: 100011; pointer-events: auto;
+  width: 300px; max-width: 90vw;
+  background: #2b2b2b; border: 1px solid #1a1a1a; border-radius: var(--r-sm);
+  box-shadow: 0 16px 44px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.04);
+  padding: 18px 16px 14px; text-align: center;
+}
+.animConfirmModal.hidden { display: none !important; }
+.animConfirmIcon {
+  width: 40px; height: 40px; margin: 0 auto 10px;
+  border-radius: 50%;
+  background: linear-gradient(135deg,rgba(255,177,74,.22),rgba(255,208,50,.14));
+  border: 1px solid rgba(255,177,74,.4);
+  display: flex; align-items: center; justify-content: center;
+  color: #ffb14a;
+}
+.animConfirmTitle { font-size: 13px; font-weight: 700; color: #eee; margin-bottom: 5px; }
+.animConfirmText { font-size: var(--fs-sm); color: rgba(238,242,255,.55); line-height: 1.5; margin-bottom: 16px; }
+.animConfirmActions { display: flex; gap: 8px; }
+.animConfirmBtn {
+  flex: 1; padding: 9px 10px; border-radius: var(--r-sm); cursor: pointer;
+  font-size: var(--fs-md); font-family: inherit; font-weight: 600; border: 1px solid transparent;
+  transition: opacity .12s, transform .08s;
+}
+.animConfirmBtn:active { transform: scale(.97); }
+.animConfirmCancel { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); color: #ccc; }
+.animConfirmCancel:hover { background: rgba(255,255,255,.1); }
+.animConfirmOk { background: linear-gradient(135deg,#ffb14a,#ffd032); border-color: rgba(255,177,74,.5); color: #1a1206; }
+.animConfirmOk:hover { opacity: .9; }
+
+/* ── Labs entry confirm — same modal, purple-branded to match the Labs
+     icon color (#a78bfa) used throughout Particle Labs ── */
+.labsConfirmIcon {
+  background: linear-gradient(135deg,rgba(167,139,250,.24),rgba(129,102,230,.14));
+  border-color: rgba(167,139,250,.4);
+  color: #a78bfa;
+}
+.labsConfirmOk { background: linear-gradient(135deg,#a78bfa,#8166e6); border-color: rgba(167,139,250,.5); color: #150f2b; }
+.labsConfirmOk:hover { opacity: .9; }
+
+/* ── Settings row that behaves like a button (Entrar/Sair no Labs) ── */
+.setRowButton {
+  width: 100%; background: none; border: none; padding: 0; margin: 0;
+  font-family: inherit; text-align: left; cursor: pointer;
+}
+.setRowButton:active { opacity: .8; }
+.setRowChevron { flex-shrink: 0; color: rgba(255,255,255,.3); }
+.setSectionHighlight .setRowLabel svg { color: #a78bfa; }
+.setSectionHighlight { background: linear-gradient(135deg, rgba(167,139,250,.14), rgba(167,139,250,.05)); border-color: rgba(167,139,250,.35); }
+.setRowButton.active .setRowTitle { color: #c9b8fd; }
+.setRowButton.active .setRowLabel svg { color: #c9b8fd; }
+
+.settingsMenuBody {
+  flex: 1;
+  min-height: 0;                    /* ★ the actual fix: without this, a flex child
+                                          with overflow:auto never shrinks below its
+                                          own content height, so overflow never
+                                          engages — content silently clips instead
+                                          of scrolling, and anything past the fold
+                                          becomes both invisible AND unclickable. */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px;
+  display: flex; flex-direction: column; gap: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.15) transparent;
+}
+.settingsMenuBody::-webkit-scrollbar { width: 4px; }
+.settingsMenuBody::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: var(--r-xs); }
+
+/* ── Sections ── */
+.setSection {
+  background: #232323;
+  border: 1px solid #1a1a1a;
+  border-radius: var(--r-sm);
+  padding: 8px;
+}
+.setSectionHighlight {
+  background: linear-gradient(135deg, rgba(255,177,74,.14), rgba(255,177,74,.05));
+  border-color: rgba(255,177,74,.35);
+}
+.setSectionTitle {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.4);
+  margin-bottom: 7px;
+}
+
+/* ── Rows (label + control) ── */
+.setRow {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.setRowLabel {
+  display: flex; align-items: center; gap: 7px;
+  min-width: 0;
+}
+.setRowLabel svg { flex-shrink: 0; color: var(--accent-orange); }
+.setRowTitle { font-size: var(--fs-sm); font-weight: 600; color: #eee; }
+.setRowHint  { font-size: var(--fs-2xs); color: rgba(255,255,255,.4); margin-top: 1px; line-height: 1.3; }
+
+.setToggleRow {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 0;
+  font-size: 10.5px; color: rgba(230,230,230,.75);
+  cursor: pointer;
+}
+
+/* ── Toggle switch — accent-orange when active (shared "on" language across the app) ── */
+.setSwitch { position: relative; display: inline-block; width: 30px; height: 16px; flex-shrink: 0; }
+.setSwitch input { opacity: 0; width: 0; height: 0; }
+.setSwitchTrack {
+  position: absolute; inset: 0;
+  background: #1a1a1a;
+  border: 1px solid #111;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background .18s;
+}
+.setSwitchTrack::before {
+  content: '';
+  position: absolute; width: 12px; height: 12px;
+  left: 2px; top: 1px;
+  background: rgba(255,255,255,.55);
+  border-radius: 50%;
+  transition: transform .18s, background .18s;
+}
+.setSwitch input:checked + .setSwitchTrack { background: var(--accent-orange); border-color: var(--accent-orange); }
+.setSwitch input:checked + .setSwitchTrack::before { transform: translateX(14px); background: #fff; }
+
+/* ── Color row ── */
+.setColorRow {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer;
+}
+.setColorRow input[type="color"] {
+  width: 26px; height: 22px;
+  border-radius: var(--r-xs);
+  border: 1px solid #1a1a1a;
+  cursor: pointer;
+  background: transparent;
+  padding: 0;
+}
+.setColorRow span { font-size: 10.5px; color: rgba(230,230,230,.7); }
+
+/* ── Buttons ── */
+.setBtnStack { display: flex; flex-direction: column; gap: 5px; }
+.setBtn {
+  width: 100%;
+  padding: 6px 10px;
+  background: #363636;
+  border: 1px solid #1a1a1a;
+  border-radius: var(--r-xs);
+  color: rgba(230,230,230,.8);
+  font-size: 10.5px; font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all .13s;
+  text-align: center;
+}
+.setBtn:hover { background: #414141; border-color: #2a2a2a; color: #fff; }
+.setBtnAccent {
+  background: rgba(255,177,74,.16);
+  border-color: rgba(255,177,74,.4);
+  color: var(--accent-orange);
+}
+.setBtnAccent:hover { background: rgba(255,177,74,.26); border-color: rgba(255,177,74,.6); }
+.setBtnDanger { color: rgba(255,120,120,.7); }
+.setBtnDanger:hover { background: rgba(255,60,60,.14); border-color: rgba(255,80,80,.4); color: #ff8888; }
+
+/* ── Top bar button active state — same accent-orange as every other
+     "active/selected" state in the app (gizmo, tabs, layers, panels) ── */
+.topBarIconBtn.active {
+  background: rgba(255,177,74,.16) !important;
+  border-color: rgba(255,177,74,.45) !important;
+  color: var(--accent-orange) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LABS LEFT PANEL — function palette (SFM-style "Add..." browser)
+   ═══════════════════════════════════════════════════════════════════ */
+
+#labsLeftPanel {
+  /* Labs' own dim/gray tone — darker and more muted than the app-wide
+     --text-dim (a light lavender-gray), which read as too pale/washed-out
+     against Labs' otherwise dark chrome. Scoped as a variable override so
+     every element already using var(--text-dim) in here (category button
+     default color, hints, hierarchy labels, etc.) picks it up for free. */
+  --text-dim: rgba(150,150,162,0.6);
+  position: fixed;
+  left: 0; top: var(--bar-h-top); bottom: var(--bar-h-bot);
+  width: var(--left-w);
+  display: flex; flex-direction: column;
+  background: var(--panel-bg);
+  border-right: 1px solid var(--panel-border);
+  z-index: 50;
+}
+#labsLeftPanel.hidden { display: none !important; }
+
+#labsLeftPanelButtons {
+  display: flex;
+  border-bottom: 1px solid var(--panel-border);
+  flex-shrink: 0;
+}
+
+/* ── Segments modal — same visual pattern as .animConfirmModal (used by
+   "Entrar no Particle Labs?"), with an X to back out and two big choice
+   buttons instead of Cancel/Entrar. Picking one closes this modal and
+   swaps the Sistema-tab list + left palette straight into that segment;
+   no button row is left behind anywhere. */
+.labsSegmentsModalClose {
+  position: absolute; top: 10px; right: 10px;
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: var(--r-xs);
+  color: rgba(255,255,255,.7); font-size: 12px; line-height: 1; cursor: pointer;
+}
+.labsSegmentsModalClose:hover { color: #fff; background: rgba(255,255,255,.12); }
+.labsSegmentsChoices { display: flex; gap: 8px; }
+.labsSegmentChoiceBtn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 14px 8px; border-radius: var(--r-sm); cursor: pointer;
+  background: rgba(167,139,250,.1); border: 1px solid rgba(167,139,250,.28); color: #dccbff;
+  font-family: inherit; font-size: var(--fs-sm); font-weight: 600;
+  transition: background .12s, border-color .12s, transform .08s;
+}
+.labsSegmentChoiceBtn svg { width: 22px; height: 22px; }
+.labsSegmentChoiceBtn:hover { background: rgba(167,139,250,.22); border-color: rgba(167,139,250,.5); }
+.labsSegmentChoiceBtn:active { transform: scale(.97); }
+.labsSegmentChoiceBtn[disabled] { opacity: .45; cursor: not-allowed; }
+.labsSegmentChoiceBtn[disabled]:hover { background: rgba(167,139,250,.1); border-color: rgba(167,139,250,.28); }
+
+/* Page 1's button row grew from 4 to 6 categories (Animação/Estilo moved
+   in from the old Page 2) — flex:1 on 6 items in one row squeezed them
+   past the panel's fixed width. Wrap into two rows of three instead of
+   shrinking text further. */
+#labsPage1Buttons { flex-wrap: wrap; }
+#labsPage1Buttons .leftPanelBtn { flex: 1 1 33.333%; min-width: 0; }
+/* Page 1/Page 2 button groups need their OWN flex-row context — .leftPanelBtn
+   uses flex:1 to share the row evenly, which only works with a direct
+   display:flex parent. Without this, the buttons fall back to block layout
+   and stack vertically, which also starves #labsLeftContent of height since
+   #labsLeftPanelButtons is flex-shrink:0 (fixed report: buttons went
+   vertical AND the palette list below them stopped being visible). */
+#labsPage1Buttons { display: flex; flex: 1; }
+.labsPaletteBtn.active {
+  color: #a78bfa;
+  background: rgba(167,139,250,.08);
+  border-bottom: 2px solid #a78bfa;
+}
+
+#labsLeftContent {
+  flex: 1;
+  display: flex; flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.labs-palette-hint {
+  padding: 16px 12px;
+  font-size: 10.5px;
+  color: rgba(255,255,255,.3);
+  text-align: center;
+  line-height: 1.5;
+}
+.labs-palette-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex; flex-direction: column; gap: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(167,139,250,.15) transparent;
+}
+/* BUG FIX: #labsPage2Bespoke (Style/Animation/Aura tabs) is #labsPaletteList's
+   sibling/replacement inside the same #labsLeftContent — but it never got
+   #labsPaletteList's flex:1 + overflow-y:auto treatment, so once its content
+   (e.g. the Aura tab's Abordagem + Billboard + Shell + Partículas sections)
+   grew taller than the panel, #labsLeftContent's overflow:hidden just
+   silently clipped the rest with no way to scroll down to it. */
+#labsPage2Bespoke {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(167,139,250,.15) transparent;
+}
+.labs-palette-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 9px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(255,255,255,.07);
+  background: rgba(255,255,255,.025);
+  cursor: pointer;
+  transition: all .14s;
+}
+.labs-palette-item:hover {
+  background: rgba(167,139,250,.09);
+  border-color: rgba(167,139,250,.35);
+  transform: translateX(1px);
+}
+.labs-palette-item:active { transform: translateX(1px) scale(.98); }
+.labs-palette-item.already-added {
+  opacity: .38;
+  cursor: default;
+}
+.labs-palette-item.already-added:hover { background: rgba(255,255,255,.025); border-color: rgba(255,255,255,.07); transform: none; }
+.labs-palette-icon {
+  flex-shrink: 0;
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.05);
+  border-radius: var(--r-sm);
+  color: #a78bfa;
+}
+.labs-palette-icon .pi-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.labs-palette-info { flex: 1; min-width: 0; }
+.labs-palette-name { font-size: var(--fs-sm); font-weight: 700; color: #eee; letter-spacing: .01em; }
+.labs-palette-desc { font-size: var(--fs-2xs); color: rgba(200,200,220,.45); margin-top: 1px; line-height: 1.35; }
+.labs-palette-added-badge {
+  flex-shrink: 0;
+  font-size: 8px; font-weight: 700;
+  color: #4ade80;
+  background: rgba(74,222,128,.12);
+  border: 1px solid rgba(74,222,128,.3);
+  border-radius: var(--r-xs);
+  padding: 1px 5px;
+  align-self: center;
+}
+.labs-attach-card.is-attached {
+  background: rgba(74,222,128,.06);
+  border-color: rgba(74,222,128,.3);
+}
+.labs-attach-card.is-attached .labs-palette-icon { color: #4ade80; }
+
+/* ── Shader FX panel (Particle Labs > left panel > Shader tab) ────────── */
+.shaderFxPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.shaderFxTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.shaderFxTab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+  color: rgba(230,230,240,.75);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 9.5px;
+  font-weight: 600;
+  transition: all .12s;
+}
+.shaderFxTab .pi-icon {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+.shaderFxTab:hover { background: rgba(167,139,250,.08); border-color: rgba(167,139,250,.3); }
+.shaderFxTab.active { background: rgba(167,139,250,.18); border-color: #a78bfa; color: #e9e3ff; }
+.shaderFxTab.on { border-color: rgba(74,222,128,.35); background: rgba(74,222,128,.08); color: #d8ffe2; }
+.shaderFxTab.on.active { background: rgba(167,139,250,.18); border-color: #a78bfa; color: #f1ebff; }
+.shaderFxTabState {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  min-width: 30px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.7);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.shaderFxTab.on .shaderFxTabState { background: rgba(74,222,128,.16); color: #82f1a2; }
+.shaderFxTab.active .shaderFxTabState { background: rgba(255,255,255,.12); color: inherit; }
+.shaderFxPanelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 2px;
+}
+.shaderFxHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.shaderFxHeader strong {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #efeaff;
+}
+.shaderFxHint {
+  font-size: 9.5px;
+  color: rgba(220,220,235,.68);
+  line-height: 1.35;
+}
+.shaderFxToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--fs-xs);
+  color: rgba(220,220,235,.78);
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.06);
+}
+.shaderFxToggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #a78bfa;
+  flex-shrink: 0;
+}
+.shaderFxParams { display: flex; flex-direction: column; gap: 6px; }
+.shaderFxParamRow {
+  display: grid; grid-template-columns: 1fr 70px; align-items: center; gap: 8px;
+  font-size: var(--fs-xs); color: rgba(220,220,235,.7);
+}
+.shaderFxParamRow input[type="number"] {
+  width: 100%; height: 24px; box-sizing: border-box;
+  background: rgba(33,33,33,.9); border: 1px solid rgba(255,255,255,.1); border-radius: var(--r-xs);
+  color: #e8e8e8; font-family: inherit; font-size: 10.5px; text-align: right; padding: 0 6px; outline: none;
+}
+.shaderFxParamRow input[type="number"]:focus { border-color: rgba(167,139,250,.5); }
+.shaderFxParamRow input[type="color"] { width: 100%; height: 24px; border-radius: var(--r-xs); border: none; padding: 0; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   STACK PANEL — right panel, shows added modules grouped by category
+   ═══════════════════════════════════════════════════════════════════ */
+
+.labs-stack-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(167,139,250,.15) transparent;
+}
+.stack-section { margin-bottom: 12px; }
+.stack-section-title {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--cat-color, #a78bfa);
+  padding: 3px 4px 6px;
+  display: flex; align-items: center; gap: 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--cat-color, #a78bfa) 20%, transparent);
+  margin-bottom: 6px;
+}
+.stack-section-icon {
+  width: 13px; height: 13px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.stack-section-icon svg { width: 100%; height: 100%; }
+.stack-section-title > span:nth-child(2) { flex: 1; }
+.stack-section-count {
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs); font-weight: 700;
+  background: color-mix(in srgb, var(--cat-color, #a78bfa) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cat-color, #a78bfa) 40%, transparent);
+  border-radius: var(--r-xs);
+  padding: 1px 5px;
+  min-width: 16px; text-align: center;
+}
+.stack-card-list { display: flex; flex-direction: column; gap: 6px; }
+.stack-empty {
+  font-size: 9.5px; color: rgba(255,255,255,.25);
+  padding: 8px; font-style: italic;
+  border: 1px dashed rgba(255,255,255,.1);
+  border-radius: var(--r-sm);
+  text-align: center;
+}
+.stack-card {
+  background: rgba(255,255,255,.035);
+  border: 1px solid rgba(255,255,255,.09);
+  border-left: 2.5px solid var(--card-accent, #a78bfa);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  transition: border-color .15s, background .15s;
+}
+.stack-card:hover { background: rgba(255,255,255,.05); }
+.stack-card-header {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 9px;
+  background: rgba(255,255,255,.03);
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.stack-card-icon { width: 15px; height: 15px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #eee; }
+.stack-card-icon .pi-icon { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.stack-card-name { font-size: 10.5px; font-weight: 700; color: #f0f0f0; flex: 1; letter-spacing: .01em; }
+.stack-card-del {
+  width: 19px; height: 19px; flex-shrink: 0;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: var(--r-xs);
+  color: rgba(255,255,255,.35);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .12s;
+}
+.stack-card-del:hover { background: rgba(255,60,60,.16); border-color: rgba(255,80,80,.4); color: #ff8888; }
+.stack-card-body { padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 3px; }
+
+/* ── Texture swatch picker ── */
+.lab-row-texture { align-items: flex-start; }
+.tex-swatch-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tex-swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 32px);
+  gap: 4px;
+  padding-top: 2px;
+}
+.tex-swatch {
+  width: 32px; height: 32px;
+  padding: 0;
+  background: #0a0a12;
+  border: 1.5px solid rgba(255,255,255,.1);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .12s;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  color: rgba(255,255,255,.7);
+  font-size: 8px;
+  font-weight: 700;
+}
+.tex-swatch canvas { width: 100%; height: 100%; display: block; image-rendering: -webkit-optimize-contrast; }
+.tex-swatch:hover { border-color: rgba(255,255,255,.3); transform: scale(1.06); }
+.tex-swatch-on { border-color: #a78bfa; box-shadow: 0 0 0 1px #a78bfa, 0 0 8px rgba(167,139,250,.5); }
+.tex-swatch-custom {
+  background-color: #0a0a12;
+}
+.tex-import-btn {
+  align-self: flex-start;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(167,139,250,.24);
+  background: rgba(167,139,250,.08);
+  color: #e8ddff;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: .01em;
+  transition: all .12s;
+}
+.tex-import-btn:hover {
+  background: rgba(167,139,250,.16);
+  border-color: rgba(167,139,250,.4);
+}
+
+/* ── Hierarchy drag-to-parent ── */
+.drag-src  { opacity: .4; }
+.drag-over { outline: 2px solid #ffb347; outline-offset: -2px; border-radius: var(--r-xs); background: rgba(255,179,71,.1); }
+
+/* Long-press charge-up — duration must match LONG_PRESS_MS in main.js (1.5s) */
+.objectItem.pressing { background: rgba(255,177,74,.14); }
+.objectItem.pressing::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 2px;
+  background: var(--accent-orange);
+  width: 0%;
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
+  animation: objectItemPressFill 1.5s linear forwards;
+}
+@keyframes objectItemPressFill {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RENDER SETTINGS — BeforeRender / Resolution / Format
+═══════════════════════════════════════════════════════════════════════════ */
+
+.renderSettingsWrap {
+  padding: 6px 0 2px;
+  border-top: 1px solid rgba(255,255,255,.06);
+  margin-top: 10px;
+}
+
+/* ── BeforeRender toggle row ── */
+.brRow {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 0 4px;
+  margin-bottom: 2px;
+}
+.brLeft { display: flex; align-items: center; gap: 7px; }
+.brIcon { font-size: var(--fs-sm); color: var(--accent-orange); line-height:1; }
+.brLabel { font-size: var(--fs-sm); font-weight: 600; color: rgba(238,242,255,.85); }
+
+/* Toggle switch — shares the app-wide "on" language, see .setSwitch */
+.brToggle { position: relative; display: inline-block; width: 36px; height: 20px; cursor: pointer; }
+.brToggle input { opacity: 0; width: 0; height: 0; }
+.brSlider {
+  position: absolute; inset: 0;
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 20px;
+  transition: background .2s, border-color .2s;
+}
+.brSlider::before {
+  content: '';
+  position: absolute; width: 14px; height: 14px;
+  border-radius: 50%; background: #aaa;
+  top: 2px; left: 2px;
+  transition: transform .2s, background .2s;
+}
+.brToggle input:checked + .brSlider { background: var(--accent-orange); border-color: var(--accent-orange); }
+.brToggle input:checked + .brSlider::before { transform: translateX(16px); background: #fff; }
+
+/* BeforeRender active banner */
+.brBanner {
+  background: rgba(255,177,74,.14);
+  border: 1px solid rgba(255,177,74,.35);
+  border-radius: var(--r-sm);
+  padding: 7px 10px;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: #ffd27a;
+  margin-bottom: 8px;
+}
+.brBanner strong { color: var(--accent-orange); font-size: var(--fs-sm); display: block; margin-bottom: 2px; }
+.brBanner.hidden { display: none; }
+
+/* ── Section labels ── */
+.rsSectionLabel {
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: rgba(200,210,240,.4);
+  margin: 8px 0 5px;
+  padding-left: 1px;
+}
+
+/* ── Dropdown blocks ── */
+.rsBlock { margin-bottom: 6px; }
+.rsBlockLabel {
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: rgba(180,190,220,.35);
+  margin-bottom: 3px;
+  padding: 3px 8px 0;
+  border-left: 2px solid rgba(255,177,74,.5);
+}
+.rsSelectWrap {
+  position: relative;
+  display: flex; align-items: center;
+}
+.rsSelect {
+  width: 100%;
+  padding: 6px 28px 6px 10px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: var(--r-sm);
+  color: rgba(238,242,255,.85);
+  font-size: var(--fs-sm);
+  font-family: inherit;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color .12s;
+}
+.rsSelect:focus { outline: none; border-color: rgba(255,177,74,.6); }
+.rsChevron {
+  position: absolute; right: 9px;
+  width: 9px; height: 9px;
+  stroke: rgba(200,200,220,.5); stroke-width: 1.8;
+  fill: none; pointer-events: none;
+}
+
+/* ── Format buttons ── */
+.rsFormatRow {
+  display: flex; gap: 6px; margin-bottom: 8px;
+}
+.rsFormatBtn {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 8px 4px 6px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: var(--r-sm);
+  color: rgba(200,210,240,.6);
+  font-size: var(--fs-xs); font-family: inherit;
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.rsFormatBtn:hover { border-color: rgba(255,177,74,.4); background: rgba(255,177,74,.07); }
+.rsFormatBtn.active {
+  border-color: rgba(255,177,74,.8);
+  background: rgba(255,177,74,.12);
+  color: var(--accent-orange);
+}
+.rsFormatRect {
+  background: transparent;
+  border: 1.5px solid currentColor;
+  border-radius: var(--r-xs);
+  flex-shrink: 0;
+}
+
+/* ── Dimension inputs row ── */
+.rsDimRow {
+  display: flex; align-items: center; gap: 4px;
+  margin-bottom: 8px;
+}
+.rsDimInput {
+  width: 60px;
+  padding: 5px 6px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: var(--r-sm);
+  color: rgba(238,242,255,.85);
+  font-size: var(--fs-sm);
+  font-family: inherit;
+  text-align: center;
+}
+.rsDimInput:focus { outline: none; border-color: rgba(255,177,74,.6); }
+.rsDimX { font-size: var(--fs-sm); color: rgba(200,200,220,.4); }
+.rsDimPx {
+  font-size: var(--fs-xs); color: var(--accent-orange);
+  background: rgba(255,177,74,.12);
+  border: 1px solid rgba(255,177,74,.3);
+  border-radius: var(--r-xs); padding: 3px 6px;
+  white-space: nowrap;
+}
+.rsDimDefaultBtn {
+  flex: 1;
+  padding: 5px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: var(--r-sm);
+  color: rgba(200,210,240,.55);
+  font-size: var(--fs-xs); font-family: inherit;
+  cursor: pointer;
+  transition: border-color .12s;
+  white-space: nowrap;
+}
+.rsDimDefaultBtn:hover { border-color: rgba(255,255,255,.2); color: rgba(220,225,240,.8); }
+
+/* ── Watermark row ── */
+.rsWatermarkRow {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: var(--fs-sm); color: rgba(220,225,240,.7);
+  padding: 3px 0 8px;
+  cursor: pointer;
+}
+.rsWatermarkRow input[type="checkbox"] {
+  width: 14px; height: 14px;
+  accent-color: var(--accent-orange);
+  cursor: pointer;
+}
+
+/* ── Render PNG button ── */
+.rsRenderBtn {
+  width: 100%;
+  padding: 10px;
+  background: var(--accent-orange);
+  border: none;
+  border-radius: var(--r-sm);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  letter-spacing: .02em;
+  cursor: pointer;
+  transition: opacity .15s, transform .1s;
+}
+.rsRenderBtn:hover { opacity: .88; }
+.rsRenderBtn:active { transform: translateY(1px); }
+
+/* ═══════════════════════════════════════════════════════════════
+   ADV TAB — Nexuz Engine Advanced Post Effects
+═══════════════════════════════════════════════════════════════ */
+
+.advEffectRow {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 0 5px;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+}
+.advEffectName {
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--fs-sm); font-weight: 600; color: rgba(220,230,255,.8);
+}
+.advBadge {
+  font-size: 8.5px; font-weight: 700; letter-spacing: .04em;
+  padding: 1px 5px; border-radius: var(--r-xs);
+  background: rgba(100,150,255,.14); border: 1px solid rgba(100,150,255,.3);
+  color: #93c5fd;
+}
+.advToggle { position: relative; display: inline-block; width: 32px; height: 18px; cursor: pointer; }
+.advToggle input { opacity: 0; width: 0; height: 0; }
+.advSlider {
+  position: absolute; inset: 0;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
+  border-radius: 18px; transition: background .18s;
+}
+.advSlider::before {
+  content: ''; position: absolute;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: #888; top: 2px; left: 2px;
+  transition: transform .18s, background .18s;
+}
+.advToggle input:checked + .advSlider { background: var(--accent-orange); border-color: var(--accent-orange); }
+.advToggle input:checked + .advSlider::before { transform: translateX(14px); background: #fff; }
+
+.advEffectBody {
+  background: rgba(255,255,255,.025);
+  border-radius: var(--r-sm); padding: 8px 10px; margin: 4px 0 6px;
+  border: 1px solid rgba(255,255,255,.06);
+}
+.advEffectBody.hidden { display: none; }
+.advHint {
+  font-size: var(--fs-2xs); color: rgba(180,200,255,.45);
+  line-height: 1.45; margin-bottom: 7px;
+}
+.advGrid2 {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+}
+.advGrid2 label, .advCtrl {
+  display: flex; flex-direction: column; gap: 2px;
+  font-size: 9.5px; color: rgba(200,210,240,.65);
+}
+.advGrid2 label input[type="range"], .advCtrl input[type="range"] {
+  width: 100%; accent-color: #3b82f6; margin-top: 2px;
+}
+.advGrid2 label input[type="number"] {
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+  border-radius: var(--r-xs); color: rgba(230,235,255,.85); font-family: inherit;
+  font-size: var(--fs-sm); padding: 3px 6px;
+}
+.advCtrl { margin-top: 5px; }
+.advCtrl input[type="color"] { height: 24px; width: 100%; border-radius: var(--r-xs); border: none; }
+.advProgress { margin-top: 8px; }
+.advProgressBar { height: 4px; border-radius: var(--r-xs); background: rgba(255,255,255,.1); overflow: hidden; }
+.advProgressFill { height: 100%; border-radius: var(--r-xs); width: 0%; background: linear-gradient(90deg, #3b82f6, #ffb14a); transition: width .4s; }
+.advActionBtn {
+  flex: 1; padding: 6px 8px; border-radius: var(--r-sm); cursor: pointer;
+  font-size: var(--fs-sm); font-family: inherit; font-weight: 600;
+  background: linear-gradient(135deg,rgba(30,64,175,.4),rgba(56,189,248,.25));
+  border: 1px solid rgba(96,165,250,.4); color: #93c5fd;
+  transition: opacity .12s;
+}
+.advActionBtn:hover { opacity: .82; }
+
+/* Precise numeric parameter rows (icon + label + exact number) — replaces
+   the old <input type="range"> sliders, which were fiddly to set precisely
+   with a fingertip. Mirrors the app-wide .gridForm number-input styling
+   used in the Light/Bloom/Outline panels, with a small identifying icon. */
+.advParamGrid { display: grid; gap: 5px; margin-top: 2px; }
+.advParam {
+  display: grid;
+  grid-template-columns: 16px 1fr 58px;
+  align-items: center; gap: 7px;
+  font-size: 9.5px; color: rgba(200,210,240,.75);
+}
+.advParamIcon {
+  width: 13px; height: 13px;
+  stroke: #7ea8ff; fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  opacity: .85;
+}
+.advParam input[type="number"] {
+  width: 100%; height: 25px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.06);
+  color: rgba(230,235,255,.9); font-family: inherit;
+  font-size: 10.5px; text-align: right; padding: 0 6px;
+  outline: none; transition: border-color .12s, background .12s;
+}
+.advParam input[type="number"]:focus {
+  border-color: rgba(96,165,250,.6);
+  background: rgba(255,255,255,.09);
+}
+.advBadgeReal {
+  font-size: 8.5px; font-weight: 700; letter-spacing: .04em;
+  padding: 1px 5px; border-radius: var(--r-xs);
+  background: rgba(34,197,94,.16); border: 1px solid rgba(34,197,94,.4);
+  color: #4ade80;
+}
+
+/* ── Language select in settings ── */
+.setSelect {
+  width: 100%; padding: 7px 10px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: var(--r-sm);
+  color: rgba(238,242,255,.85);
+  font-size: var(--fs-sm); font-family: inherit;
+  appearance: none;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.setSelect:focus { outline: none; border-color: rgba(201,126,32,.5); }
+
+
+/* ── Splash screen ───────────────────────────────────────────────────────── */
+#splashScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  background: linear-gradient(180deg, #14151b 0%, #0b0d12 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  transition: opacity .4s ease;
+  opacity: 1;
+  pointer-events: auto;
+}
+#splashScreen.done {
+  opacity: 0;
+  pointer-events: none;
+}
+.splashBrand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  position: relative;
+  transform: translateY(-8px);
+}
+.splashLogo {
+  font-size: clamp(34px, 7vw, 54px);
+  font-weight: 900;
+  letter-spacing: .06em;
+  color: var(--accent-orange);
+  line-height: 1;
+  text-shadow: 0 8px 28px rgba(255,177,74,.18);
+}
+.splashSub {
+  font-size: var(--fs-md);
+  color: rgba(238,242,255,.42);
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  margin-right: 2px;
+}
+.splashBar {
+  width: min(240px, 62vw);
+  height: 4px;
+  background: rgba(255,177,74,.18);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.splashFill {
+  width: 36%;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(255,177,74,.1), var(--accent-orange), rgba(255,177,74,.1));
+  animation: splashProg 1.35s ease-in-out infinite;
+}
+@keyframes splashProg {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(280%); }
+}
+.splashText {
+  font-size: var(--fs-sm);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: rgba(238,242,255,.42);
+}
+
+/* ── Launcher screen ─────────────────────────────────────────────────────── */
+#launcherScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
+  background: #1a1a1a;
+  display: none;
+  flex-direction: column;
+  color: var(--text-1);
+  padding: 14px;
+  pointer-events: auto;
+}
+.launcherTop {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 4px 12px;
+}
+.launcherTitle {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: .02em;
+}
+.launcherSubtitle {
+  margin-top: 2px;
+  font-size: var(--fs-md);
+  color: rgba(238,242,255,.48);
+}
+.launcherHeaderBtn,
+.launcherFooterBtn {
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.05);
+  color: var(--text-1);
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+  font: inherit;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+.launcherHeaderBtn:hover,
+.launcherFooterBtn:hover {
+  background: rgba(255,255,255,.09);
+}
+.launcherGrid {
+  flex: 1;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 4px 2px 14px;
+}
+.launcherGrid::-webkit-scrollbar { width: 5px; }
+.launcherGrid::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 999px; }
+.launcherCard {
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #232323;
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 8px 24px rgba(0,0,0,.2);
+  cursor: pointer;
+  transition: transform .16s ease, border-color .16s ease, background .16s ease;
+}
+.launcherCard:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255,177,74,.28);
+  background: #272727;
+}
+.launcherThumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #181818;
+  overflow: hidden;
+}
+.launcherThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.launcherThumbPlaceholder {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: rgba(238,242,255,.18);
+}
+.launcherThumbPlaceholder svg {
+  width: 44px;
+  height: 44px;
+  stroke: currentColor;
+}
+.launcherMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 11px 11px;
+}
+.launcherName {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.launcherMenuBtn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: var(--r-sm);
+  background: rgba(255,255,255,.04);
+  color: rgba(238,242,255,.62);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.launcherMenuBtn:hover { background: rgba(255,255,255,.09); color: var(--text-1); }
+.launcherMenu {
+  position: absolute;
+  top: 42px;
+  right: 10px;
+  min-width: 150px;
+  padding: 6px;
+  border-radius: 4px;
+  background: rgba(12,14,19,.98);
+  border: 1px solid rgba(255,255,255,.1);
+  box-shadow: 0 18px 40px rgba(0,0,0,.4);
+  transform: translateY(-5px) scale(.98);
+  opacity: 0;
+  transition: opacity .12s ease, transform .12s ease;
+  z-index: 4;
+}
+.launcherMenu.open {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+.launcherMenuItem {
+  width: 100%;
+  padding: 10px 10px;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-1);
+  font: inherit;
+  font-size: var(--fs-md);
+  text-align: left;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.launcherMenuItem:hover {
+  background: rgba(255,255,255,.06);
+}
+.launcherMenuItem.danger {
+  color: #ff8c8c;
+}
+.launcherBadge {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: rgba(255,177,74,.15);
+  color: var(--accent-orange);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  letter-spacing: .02em;
+  z-index: 2;
+}
+.launcherBadge svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  fill: none;
+}
+.launcherEmpty {
+  grid-column: 1 / -1;
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  border-radius: 6px;
+  border: 1px dashed rgba(255,255,255,.1);
+  background: rgba(255,255,255,.03);
+}
+.launcherEmptyTitle {
+  font-size: 18px;
+  font-weight: 800;
+}
+.launcherEmptyText {
+  margin-top: 4px;
+  font-size: var(--fs-md);
+  color: rgba(238,242,255,.5);
+}
+.launcherFooter {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 12px 2px 2px;
+}
+.launcherFooterBtn {
+  min-width: 110px;
+}
+.launcherFooterPrimary {
+  background: linear-gradient(135deg, #ffb14a, #ffd032);
+  border-color: rgba(255,177,74,.35);
+  color: #201207;
+}
+.launcherFooterPrimary:hover {
+  opacity: .94;
+}
+
+body.launcher-active #topBar,
+body.launcher-active #bottomBar,
+body.launcher-active #leftPanel,
+body.launcher-active #rightPanel,
+body.launcher-active #settingsMenu,
+body.launcher-active #settingsMenuBackdrop,
+body.launcher-active #animConfirmBackdrop,
+body.launcher-active #animConfirmModal,
+body.launcher-active #sampleCounterWrap {
+  display: none !important;
+}
+body.launcher-active canvas {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Compact mobile editor density ────────────────────────────────────────
+   Keeps the viewport at full size while the editor chrome is visually
+   reduced to approximately the density of a 500px-wide display. */
+@media (max-width: 500px) {
+  :root {
+    --bar-h-bot: 48px;
+    --bar-h-top: var(--bar-h-bot);
+    --left-w: 216px;
+    --right-w: 190px;
+    --sp-1: 3px;
+    --sp-2: 5px;
+    --sp-3: 7px;
+    --sp-4: 8px;
+    --sp-5: 11px;
+    --fs-2xs: 8px;
+    --fs-xs: 9px;
+    --fs-sm: 10px;
+    --fs-md: 11px;
+    --fs-lg: 13px;
+  }
+
+  .barContent { padding-left: 10px; padding-right: 10px; }
+  #gizmoPanel { gap: 4px; padding: 2px; }
+  .gizmoBtn { width: 26px; height: 26px; }
+  .gizmoBtn svg { width: 13px; height: 13px; }
+
+  .leftPanelBtn { padding: 6px 3px 6px; gap: 3px; }
+  .leftPanelBtn svg { width: 14px; height: 14px; }
+  .leftSubPanel { padding: 8px; }
+  .subPanelTitle { margin: -8px -8px 8px; padding: 8px; }
+  .ncmBackRow { margin: -8px -8px 8px; padding: 8px 8px 6px; }
+
+  #rightPanelHeader { padding: 7px 8px; }
+  .actionsButton { padding: 3px 7px; }
+
+  .bottomBarContent { padding-left: 8px !important; padding-right: 8px !important; gap: 6px !important; }
+  .bbObjName { max-width: 78px; font-size: 9.5px; }
+  .bbDivider { height: 27px; }
+
+  .toolRailBtn { min-height: 34px; }
+  .toolRailBtn svg { width: 15px; height: 15px; }
+}
+
+@media (max-width: 449px) {
+  :root {
+    --bar-h-bot: 45px;
+    --bar-h-top: var(--bar-h-bot);
+    --left-w: 207px;
+    --right-w: 182px;
+    --sp-1: 3px;
+    --sp-2: 4px;
+    --sp-3: 6px;
+    --sp-4: 7px;
+    --sp-5: 10px;
+    --fs-2xs: 8px;
+    --fs-xs: 8.5px;
+    --fs-sm: 9.5px;
+    --fs-md: 10.5px;
+    --fs-lg: 12px;
+  }
+
+  .barContent { padding-left: 8px; padding-right: 8px; }
+  #gizmoPanel { gap: 3px; }
+  .gizmoBtn { width: 24px; height: 24px; }
+  .gizmoBtn svg { width: 12px; height: 12px; }
+
+  .leftPanelBtn { padding: 5px 2px; gap: 2px; }
+  .leftPanelBtn svg { width: 13px; height: 13px; }
+  .leftSubPanel { padding: 7px; }
+  .subPanelTitle { margin: -7px -7px 7px; padding: 7px; }
+  .ncmBackRow { margin: -7px -7px 7px; padding: 7px 7px 5px; }
+
+  #rightPanelHeader { padding: 6px 7px; }
+  .actionsButton { padding: 3px 6px; }
+
+  .bottomBarContent { padding-left: 7px !important; padding-right: 7px !important; gap: 5px !important; }
+  .bbObjName { max-width: 68px; font-size: 9px; }
+}
+
+/* ── Projects launcher header actions ─────────────────────────────── */
+.launcherHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.launcherSettingsBtn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: var(--r-sm);
+  background: rgba(255,255,255,.055);
+  color: rgba(240,244,255,.75);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s, transform .08s;
+}
+.launcherSettingsBtn svg { width: 17px; height: 17px; }
+.launcherSettingsBtn:hover { background: rgba(255,255,255,.10); color: #fff; border-color: rgba(255,255,255,.18); }
+.launcherSettingsBtn.active { background: rgba(201,126,32,.18); border-color: rgba(201,126,32,.45); color: #ffc36a; }
+.launcherSettingsBtn:active { transform: scale(.96); }
+
+/* ── Projects settings menu: same visual language as the 3D settings menu ── */
+.launcherSettingsBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
+  background: rgba(0,0,0,.34);
+  backdrop-filter: blur(1.5px);
+  -webkit-backdrop-filter: blur(1.5px);
+}
+.launcherSettingsBackdrop.hidden,
+.launcherSettingsMenu.hidden { display: none !important; }
+.launcherSettingsMenu {
+  position: fixed;
+  z-index: 99999;
+  top: 76px;
+  right: 14px;
+  width: min(320px, calc(100vw - 24px));
+  max-height: min(70vh, 420px);
+  display: flex;
+  flex-direction: column;
+  background: #2b2b2b;
+  border: 1px solid #1a1a1a;
+  border-radius: var(--r-sm);
+  box-shadow: 0 16px 44px rgba(0,0,0,.62), 0 0 0 1px rgba(255,255,255,.04);
+  overflow: hidden;
+  font-size: var(--fs-sm);
+}
+.launcherSettingsHeader {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 7px 9px;
+  background: #363636;
+  border-bottom: 1px solid #1a1a1a;
+  color: #ddd;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+.launcherSettingsHeader > svg { width: 15px; height: 15px; opacity: .75; flex-shrink: 0; }
+.launcherSettingsHeader > span { flex: 1; }
+.launcherSettingsClose {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: rgba(255,255,255,.42);
+  cursor: pointer;
+}
+.launcherSettingsClose:hover { background: rgba(255,80,80,.18); color: #ff8888; }
+.launcherSettingsBody {
+  padding: 8px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.launcherSettingsSection {
+  background: #232323;
+  border: 1px solid #1a1a1a;
+  border-radius: var(--r-sm);
+  padding: 9px;
+}
+.launcherSettingsSectionTitle {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.42);
+  margin-bottom: 8px;
+}
+.launcherSettingsRow {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: rgba(230,235,255,.76);
+  font-size: 10px;
+}
+.launcherLangSelect {
+  width: 100%;
+  min-height: 31px;
+  padding: 0 9px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.05);
+  color: rgba(238,242,255,.9);
+  font: inherit;
+  cursor: pointer;
+}
+.launcherLangSelect:focus { outline: none; border-color: rgba(201,126,32,.55); }
+.launcherLangStatus {
+  min-height: 12px;
+  margin-top: 5px;
+  color: rgba(200,200,220,.42);
+  font-size: 9px;
+}
+
+/* ── "Tamanho do app" — simulate a fixed screen width/height ────────────── */
+.launcherSettingsHint {
+  font-size: 9.5px;
+  line-height: 1.4;
+  color: rgba(200,200,220,.5);
+  margin-bottom: 8px;
+}
+.launcherSizeRow { flex-direction: row; align-items: flex-end; gap: 8px; }
+.launcherSizeField { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.launcherSizeField span { font-size: 9px; color: rgba(230,235,255,.5); }
+.launcherSizeInput {
+  width: 100%;
+  min-height: 31px;
+  padding: 0 9px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.05);
+  color: rgba(238,242,255,.9);
+  font: inherit;
+}
+.launcherSizeInput:focus { outline: none; border-color: rgba(201,126,32,.55); }
+.launcherSizeX { padding-bottom: 7px; color: rgba(230,235,255,.4); font-size: 11px; }
+.launcherSizeActions { flex-direction: row; gap: 6px; margin-top: 9px; }
+.launcherSizeBtn {
+  flex: 1;
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.05);
+  color: rgba(230,235,255,.8);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.launcherSizeBtn:hover { background: rgba(255,255,255,.1); }
+.launcherSizeBtn:active { transform: scale(.97); }
+.launcherSizeBtnPrimary { background: rgba(201,126,32,.22); border-color: rgba(201,126,32,.5); color: #ffc36a; }
+.launcherSizeBtnPrimary:hover { background: rgba(201,126,32,.32); }
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   SHADER SYSTEM — Page 2 do painel Render (Procedural Shader / Domínio)
+   Reaproveita os tokens visuais existentes (--accent-orange, --r-xs, etc.)
+   e as classes já usadas em outros painéis (panelSection, controlRow,
+   checkField, tabBar) — nenhum estilo "solto" fora do padrão do NCM.
+═══════════════════════════════════════════════════════════════════════ */
+
+.ncmPage2Btn { margin-top: 10px; }
+
+.ncmBackRow {
+  display: flex; align-items: center; gap: 8px;
+  margin: -10px -10px 8px; padding: 8px 10px 6px;
+}
+.ncmBackBtn {
+  flex-shrink: 0; padding: 5px 9px; font-size: var(--fs-xs);
+}
+.ncmPage2Title { margin: 0; padding: 0; flex: 1; }
+.ncmPage2Title svg { fill: var(--accent-orange); stroke: none; }
+
+.ncmSection { margin-bottom: 2px; }
+
+.ncmShaderTabBar {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+.ncmShaderTabBtn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.ncmShaderTabPanels {
+  min-height: 0;
+}
+.ncmShaderTabPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.ncmShaderEnableRow {
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.ncmStaticSectionHeader {
+  cursor: default;
+}
+
+.ncmSelect {
+  flex: 1; min-height: 26px; padding: 0 8px;
+  border-radius: var(--r-sm); border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.05); color: var(--text-1);
+  font: inherit; font-size: var(--fs-xs); cursor: pointer;
+}
+.ncmSelect:disabled { opacity: .4; cursor: not-allowed; }
+
+.ncmParamRow { align-items: center; }
+.ncmRangeWrap {
+  flex: 1; display: flex; align-items: center; gap: 7px;
+}
+.ncmRangeWrap input[type="range"] {
+  flex: 1; accent-color: var(--accent-orange);
+}
+.ncmRangeVal {
+  min-width: 30px; text-align: right;
+  font-family: var(--font-mono); font-size: var(--fs-2xs);
+  color: var(--text-dim);
+}
+
+.ncmNumberWrap {
+  flex: 0 0 84px;
+  display: flex;
+  justify-content: flex-end;
+}
+.ncmNumber {
+  width: 84px; min-height: 26px; box-sizing: border-box;
+  padding: 4px 7px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.05);
+  color: var(--text-1);
+  font: inherit; font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+  text-align: right;
+  outline: none;
+}
+.ncmNumber:focus {
+  border-color: rgba(255,170,80,.55);
+  box-shadow: 0 0 0 1px rgba(255,170,80,.14);
+}
+.ncmNumber::-webkit-inner-spin-button,
+.ncmNumber::-webkit-outer-spin-button { opacity: .7; }
+
+.ncmColor {
+  width: 40px; height: 24px; padding: 2px 3px; cursor: pointer;
+  border-radius: var(--r-xs); border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.05); -webkit-appearance: none;
+}
+.ncmColor::-webkit-color-swatch-wrapper { padding: 0; border-radius: var(--r-xs); }
+.ncmColor::-webkit-color-swatch { border: none; border-radius: var(--r-xs); }
+
+.ncmEmptyNote, .ncmHint {
+  font-size: var(--fs-2xs); color: rgba(200,200,220,.45);
+  line-height: 1.5; margin: 2px 0 0;
+}
+
+.ncmDomainStartBtn { margin-bottom: 4px; }
+.ncmDomainClearBtn {
+  width: 100%; justify-content: center; margin: 4px 0 2px;
+  font-size: var(--fs-xs);
+}
+
+.ncmDomainEffectRow {
+  border-top: 1px solid rgba(255,255,255,.06);
+  padding: 6px 0 2px;
+}
+.ncmDomainEffectRow:first-child { border-top: none; }
+.ncmDomainCheck { padding: 2px 0; }
+.ncmDomainEffectRow .sectionBody {
+  padding: 4px 0 6px 2px;
+}
+
+@media (max-width: 460px) {
+  .ncmRangeVal { min-width: 26px; }
+  .ncmBackBtn { padding: 4px 7px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ANIMATION LEFT PANEL — Target Object / Clips / Keyframes / Settings /
+   Animation Curve. Shown instead of the normal Add/Material/Luzes/
+   Render/Camera tabs while the animation timeline is active (swapped in
+   main.js on _animModeChange, mirroring #labsLeftPanel's swap for
+   Particle Labs). All "was purple in the reference" accents (Add KF,
+   the active Target Object row, Loop's on-state) use --accent-amber
+   (yellow) rather than --accent-labs (violet) — violet stays reserved
+   for Particle Labs branding elsewhere in the app. ─────────────────── */
+#animLeftPanel {
+  position: fixed;
+  left: 0; top: var(--bar-h-top); bottom: var(--bar-h-bot);
+  width: var(--left-w);
+  display: flex; flex-direction: column;
+  background: var(--panel-bg);
+  border-right: 1px solid var(--panel-border);
+  z-index: 50;
+}
+#animLeftPanel.hidden { display: none !important; }
+
+.anim-panel-header {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--panel-border);
+  background: rgba(0,0,0,0.22);
+  font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: var(--tr-eyebrow);
+  text-transform: uppercase;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+#animLeftContent {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  padding: 10px;
+}
+#animLeftContent::-webkit-scrollbar { width: 4px; }
+#animLeftContent::-webkit-scrollbar-track { background: transparent; }
+#animLeftContent::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: var(--r-xs); }
+
+.animTargetSection, .animClipsSection, .animKeyframesSection,
+.animSettingsSection, .animGraphSection { margin-top: var(--sp-4); }
+.animTargetSection { margin-top: 0; }
+
+/* ── 1. TARGET OBJECT ─────────────────────────────────────────────────
+   Mirrors #objectsList/.objectItem's look (see right panel) so the same
+   object reads identically in both places; the active row is yellow
+   instead of the right panel's orange, since this is the one row the
+   reference photo shows purple/highlighted. */
+.animTargetList { display: flex; flex-direction: column; gap: 2px; max-height: 160px; overflow-y: auto; }
+.animTargetList::-webkit-scrollbar { width: 4px; }
+.animTargetList::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: var(--r-xs); }
+.animTargetItem {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid transparent; border-left: 2px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  transition: background .12s, border-color .12s, color .12s;
+}
+.animTargetItem svg { width: 13px; height: 13px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; opacity: .7; }
+.animTargetItem:hover { background: rgba(255,255,255,0.05); color: var(--text-1); border-color: var(--panel-border); }
+.animTargetItem.active {
+  background: rgba(255,208,50,0.14);
+  color: var(--accent-amber);
+  border-color: rgba(255,208,50,0.4);
+  border-left-color: var(--accent-amber);
+}
+.animTargetItem.active svg { opacity: 1; }
+.animTargetName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.animTargetClipDot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-anim); flex-shrink: 0; opacity: 0; }
+.animTargetClipDot.has-clip { opacity: 1; }
+
+/* ── 2. CLIPS (Default Clips presets) ───────────────────────────────── */
+.animClipsSubLabel {
+  font-size: var(--fs-2xs); color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: var(--tr-eyebrow);
+  margin: 2px 0 6px;
+}
+.animDefaultClipsList { display: flex; flex-direction: column; gap: 5px; }
+.animDefaultClipItem {
+  width: 100%;
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 9px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--text-1);
+  cursor: pointer; text-align: left;
+  font-family: inherit;
+  transition: border-color .12s, background .12s;
+}
+.animDefaultClipItem svg { width: 15px; height: 15px; flex-shrink: 0; stroke: var(--text-dim); fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.animDefaultClipItem:hover { border-color: var(--state-hover-border); background: var(--state-hover-bg); }
+.animDefaultClipItem:hover svg { stroke: var(--text-1); }
+.animDefaultClipName { flex: 1; font-size: var(--fs-xs); }
+.animDefaultClipDur { flex-shrink: 0; font-size: var(--fs-2xs); font-family: var(--font-mono); color: var(--text-muted); }
+
+/* ── 3. KEYFRAMES ────────────────────────────────────────────────────
+   Add KF = filled yellow (purple in the reference); Linear = green
+   outline, matching --accent-anim ("animate" is already this app's
+   green everywhere else); Del KF = red/danger outline. */
+.animKfToolbar { display: flex; gap: 5px; }
+.animKfBtn {
+  flex: 1; min-height: 30px;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  border-radius: var(--r-sm);
+  font-size: 10.5px; font-weight: 700; font-family: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background .12s, border-color .12s, filter .12s;
+}
+.animKfBtnAdd {
+  background: var(--accent-amber);
+  border-color: var(--accent-amber);
+  color: #241a02;
+}
+.animKfBtnAdd:hover { filter: brightness(1.08); }
+.animKfBtnLinear {
+  background: rgba(76,239,172,.1);
+  border-color: rgba(76,239,172,.4);
+  color: var(--accent-anim);
+}
+.animKfBtnLinear:hover { background: rgba(76,239,172,.18); border-color: var(--accent-anim); }
+.animKfBtnDel {
+  background: rgba(248,113,113,.08);
+  border-color: rgba(248,113,113,.35);
+  color: var(--accent-danger);
+}
+.animKfBtnDel:hover { background: rgba(248,113,113,.16); border-color: var(--accent-danger); }
+
+.animKeyframesList { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; max-height: 190px; overflow-y: auto; }
+.animKeyframesList::-webkit-scrollbar { width: 4px; }
+.animKeyframesList::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: var(--r-xs); }
+.animKfRow {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg-recessed);
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.animKfRow:hover { border-color: var(--state-hover-border); }
+.animKfRow.active { border-color: var(--accent-amber); background: rgba(255,208,50,0.1); }
+.animKfFrameLabel { flex-shrink: 0; font-size: var(--fs-2xs); font-family: var(--font-mono); color: var(--text-dim); min-width: 30px; }
+.animKfRow.active .animKfFrameLabel { color: var(--accent-amber); }
+.animKfDots { flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; overflow: hidden; }
+.animKfDot { width: 2px; height: 2px; border-radius: 50%; background: currentColor; opacity: .5; flex-shrink: 0; }
+.animKfRow.interp-smooth   .animKfDots { color: var(--accent-orange); }
+.animKfRow.interp-linear   .animKfDots { color: var(--accent-anim); }
+.animKfRow.interp-constant .animKfDots { color: var(--text-muted); }
+.animKfInterpLabel { flex-shrink: 0; font-size: 9px; color: var(--text-muted); }
+.animKfRow.interp-smooth   .animKfInterpLabel { color: var(--accent-orange); }
+.animKfRow.interp-linear   .animKfInterpLabel { color: var(--accent-anim); }
+
+/* ── FPS/Interpolação mini row (Suave/Linear/Constante), relocated
+   into the Keyframes section — reuses .interp-btn injected by
+   animation.js's injectStyles() (same class, no rule duplicated). ── */
+#animFpsMount { margin-top: 8px; }
+#animFpsMount .fps-panel.anim-embedded {
+  position: static; left: auto; right: auto; bottom: auto;
+  box-shadow: none; backdrop-filter: none;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg-recessed);
+  z-index: auto;
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 7px 8px;
+}
+#animFpsMount .fps-label { font-size: var(--fs-2xs); color: var(--text-muted); width: 100%; }
+#animFpsMount .interp-btns { width: 100%; }
+#animFpsMount .interp-btn { flex: 1; justify-content: center; }
+
+/* ── 4. SETTINGS ─────────────────────────────────────────────────────
+   Reuses the exact card language from #settingsMenu (.setSection-style
+   card, same row rhythm) so it visually matches "o menu de
+   configurações" even though it lives inline in the sidebar. */
+.animSettingsCard {
+  background: #232323;
+  border: 1px solid #1a1a1a;
+  border-radius: var(--r-sm);
+  padding: 9px 10px;
+  display: flex; flex-direction: column; gap: 9px;
+}
+.animSettingRow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.animSettingRow label { font-size: var(--fs-sm); color: #eee; font-weight: 600; }
+.animSettingRow input[type="number"] {
+  width: 64px; height: 26px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--btn-border);
+  background: var(--panel-bg-recessed);
+  color: var(--text-1); outline: none;
+  padding: 0 7px; font-size: var(--fs-xs); font-family: var(--font-mono);
+  text-align: right;
+}
+.animSettingRowDuration { align-items: flex-start; flex-direction: column; gap: 5px; }
+.animDurationInputs { display: flex; gap: 5px; width: 100%; }
+.animDurationInputs input[type="number"] { flex: 1; width: auto; text-align: left; }
+.animUnitSelect {
+  width: 56px; height: 26px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--btn-border);
+  background: var(--panel-bg-recessed);
+  color: var(--text-1);
+  font-size: var(--fs-xs); font-family: inherit;
+  cursor: pointer;
+}
+/* Loop toggle — yellow when on (purple in the reference), distinct from
+   the orange .setSwitch used for every other on/off in the app. */
+.setSwitch.setSwitchYellow input:checked + .setSwitchTrack { background: var(--accent-amber); border-color: var(--accent-amber); }
+
+/* ── 5. ANIMATION CURVE (Graph Editor) ──────────────────────────────
+   Embedded via mountAnimSidebarExtras(), same canvas/logic the old
+   floating Graph Editor popup used — just docked instead of floating. */
+#animGraphMount .tl-tool-panel.anim-embedded {
+  position: static; left: auto; right: auto; bottom: auto;
+  box-shadow: none; backdrop-filter: none;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--panel-border); border-top: none;
+  background: var(--panel-bg-recessed);
+  z-index: auto;
+}
+#animGraphMount .graph-body { height: 150px; }
+
+/* ── ANIM PATH MENU — the "paths config" modal, built on the exact same
+   chrome as #settingsMenu (.settingsMenu/.settingsMenuHeader/
+   .settingsMenuBody classes are reused directly); only the width and a
+   couple of accent tweaks are specific to this menu. Body content is
+   pathConfigTemplate()'s existing .gridForm/.animToggleBtns/
+   .animPathAddBtn markup, just wrapped in a .setSection card. ── */
+.animPathMenu { width: 300px !important; max-height: min(78vh, 560px); }
+.animPathMenu .setSection { margin: 0; }
+.animPathMenu .gridForm { margin-bottom: var(--sp-2); }
+
+/* pathConfigTemplate()'s own field chrome (Plano/Sentido/Eixos segmented
+   groups + the "+ Adicionar ao objeto" submit) — unchanged from the old
+   inline version, just now rendered inside .animPathMenu instead of
+   inline in the sidebar, so kept as its own reusable block. */
+.animPathMenu .sectionTitle { margin: var(--sp-3) 0 var(--sp-1); }
+.animPathMenu .sectionTitle:first-child { margin-top: 0; }
+.animToggleBtns { display: flex; gap: 4px; flex-wrap: wrap; }
+.animToggleBtn {
+  flex: 1; min-width: 0;
+  padding: 5px 4px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--text-dim);
+  font-size: var(--fs-2xs); font-family: inherit;
+  cursor: pointer; text-align: center;
+  transition: border-color .12s, background .12s, color .12s;
+  white-space: nowrap;
+}
+.animToggleBtn:hover { border-color: var(--state-hover-border); background: var(--state-hover-bg); }
+.animToggleBtn.active {
+  border-color: rgba(255,177,74,0.85);
+  color: var(--accent-orange);
+  background: rgba(255,177,74,0.14);
+}
+.animPathAddBtn {
+  width: 100%; min-height: 32px;
+  margin-top: 10px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(255,177,74,0.5);
+  background: rgba(255,177,74,0.14);
+  color: var(--accent-orange);
+  font-size: var(--fs-xs); font-weight: 700; font-family: inherit;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.animPathAddBtn:hover { background: rgba(255,177,74,0.24); border-color: var(--accent-orange); }
+.animPathAddBtn:active { transform: translateY(1px); }
