@@ -417,13 +417,23 @@ canvas { display: block; width: 100%; height: 100%; -webkit-tap-highlight-color:
   background: rgba(0,0,0,0.24);
   border-bottom: 1px solid var(--panel-border);
   flex-shrink: 0;
+  gap: 6px;
 }
+/* The title group and the actions group used to both refuse to shrink,
+   so on a narrow panel their combined width exceeded the header and
+   justify-content:space-between let them overlap in the middle (undo/
+   redo drawn on top of "OBJETOS"). Now the title truncates with an
+   ellipsis instead, and the actions group is pinned to its natural size
+   so the buttons are always fully visible. */
+#rightPanelHeader > div:first-child { min-width: 0; overflow: hidden; }
 
 .rightPanelTitle {
   font-size: var(--fs-xs); font-weight: 700;
   letter-spacing: var(--tr-eyebrow);
   text-transform: uppercase;
   color: var(--text-dim);
+  display: block; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 /* ── Actions button & menu ─────────────────────────────────────────────────── */
@@ -1257,6 +1267,7 @@ canvas { display: block; width: 100%; height: 100%; -webkit-tap-highlight-color:
 /* ── Right panel header with undo/redo ──────────────────────────────────────── */
 .rightPanelActions {
   display: flex; align-items: center; gap: 4px;
+  flex-shrink: 0;
 }
 
 .undoRedoBtn {
@@ -2901,12 +2912,14 @@ body.labs-preview-mode .labsIconMenuBackdrop {
 .labsSegmentChoiceBtn[disabled] { opacity: .45; cursor: not-allowed; }
 .labsSegmentChoiceBtn[disabled]:hover { background: rgba(167,139,250,.1); border-color: rgba(167,139,250,.28); }
 
-/* Page 1's button row grew from 4 to 6 categories (Animação/Estilo moved
-   in from the old Page 2) — flex:1 on 6 items in one row squeezed them
-   past the panel's fixed width. Wrap into two rows of three instead of
-   shrinking text further. */
-#labsPage1Buttons { flex-wrap: wrap; }
-#labsPage1Buttons .leftPanelBtn { flex: 1 1 33.333%; min-width: 0; }
+/* Page 1's row grew from 4 to 6 categories (Animação/Estilo moved in from
+   the old Page 2). Wrapping to two rows made the panel taller for no good
+   reason — instead these go icon-only (each already has a `title` for the
+   tooltip) and shrink down, so all six comfortably share one row. */
+#labsPage1Buttons { flex-wrap: nowrap; }
+#labsPage1Buttons .leftPanelBtn { padding: 7px 2px; min-width: 0; }
+#labsPage1Buttons .leftPanelBtn svg { width: 15px; height: 15px; }
+#labsPage1Buttons .leftPanelBtn span { display: none; }
 /* Page 1/Page 2 button groups need their OWN flex-row context — .leftPanelBtn
    uses flex:1 to share the row evenly, which only works with a direct
    display:flex parent. Without this, the buttons fall back to block layout
