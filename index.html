@@ -1334,6 +1334,19 @@
               </button>
             </div>
             <div id="labs-particles-list" class="labs-particles-list"></div>
+
+            <!-- ── Sistemas de Lightning — mesmo Lightning da Aura (mesma
+                 classe/config por baixo, Shell/Billboard desligados), só
+                 que vivendo direto aqui no Sistema normal em vez de atrás
+                 do Aura Labs. ── -->
+            <div class="labs-panel-header" style="margin-top:10px;">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#55bbff" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span>Sistemas de Lightning</span>
+              <button id="lab-add-lightning-from-list" class="labs-header-add-btn" title="Adicionar lightning" type="button">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </div>
+            <div id="labs-lightnings-list" class="labs-particles-list"></div>
           </div>
 
           <!-- ── Sistemas de Aura — módulo 100% separado (auraLabs.js), só
@@ -1443,17 +1456,18 @@
     <div id="lab-preset-picker" class="labs-preset-picker hidden">
       <div class="labs-preset-picker-inner">
         <div class="labs-preset-picker-header">
-          <span>Escolher Preset</span>
+          <span>Meus Presets</span>
           <button id="lab-preset-close" class="labs-xbtn" type="button">✕</button>
         </div>
-        <div class="labs-preset-cats">
-          <button class="labs-preset-cat-btn active" data-cat="all" type="button">Todos</button>
-          <button class="labs-preset-cat-btn" data-cat="magic" type="button">Magic</button>
-          <button class="labs-preset-cat-btn" data-cat="combat" type="button">Combat</button>
-          <button class="labs-preset-cat-btn" data-cat="elemental" type="button">Elemental</button>
-          <button class="labs-preset-cat-btn" data-cat="atmosphere" type="button">Atmosphere</button>
-        </div>
         <div id="lab-preset-list" class="labs-preset-list"></div>
+        <button id="lab-preset-new-btn" class="labs-preset-new-btn" type="button" title="Salvar sistema atual como preset">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <div id="lab-preset-name-row" class="lab-preset-name-row hidden">
+          <input id="lab-preset-name-input" type="text" placeholder="Nome do preset" maxlength="40">
+          <button id="lab-preset-name-confirm" type="button">Salvar</button>
+          <button id="lab-preset-name-cancel" type="button">✕</button>
+        </div>
       </div>
     </div>
 
@@ -1823,20 +1837,22 @@
         const CACHE = {};
         const BASE_LANG = 'pt';
 
+        function isTranslatableNode(n) {
+          const p = n.parentElement;
+          if (!p) return false;
+          const tag = p.tagName?.toLowerCase?.();
+          if (['script','style','input','textarea','select'].includes(tag)) return false;
+          if (n.textContent.trim() === '') return false;
+          if (p.closest('#cfgLangSelect')) return false;
+          return true;
+        }
+
         // Collect all text nodes that should be translated
         function getTextNodes(root) {
           const walker = document.createTreeWalker(
             root,
             NodeFilter.SHOW_TEXT,
-            { acceptNode: n => {
-              const p = n.parentElement;
-              if (!p) return NodeFilter.FILTER_REJECT;
-              const tag = p.tagName?.toLowerCase?.();
-              if (['script','style','input','textarea','select'].includes(tag)) return NodeFilter.FILTER_REJECT;
-              if (n.textContent.trim() === '') return NodeFilter.FILTER_REJECT;
-              if (p.closest('#cfgLangSelect')) return NodeFilter.FILTER_REJECT;
-              return NodeFilter.FILTER_ACCEPT;
-            }}
+            { acceptNode: n => isTranslatableNode(n) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT }
           );
           const nodes = [];
           let n;
@@ -1861,8 +1877,71 @@
         }
 
         // Store original text nodes for restore
-        let _origTexts = null;
+        let _origTexts = [];
         let _lastLang = '';
+        // Every node we've ever set translated text into, so the live
+        // observer below doesn't re-translate its own output (which would
+        // otherwise re-trigger itself forever) and so "original" strings
+        // captured here aren't accidentally overwritten a second time.
+        const _tracked = new WeakSet();
+        let _translating = false;
+
+        async function translateNodes(nodes, lang) {
+          _translating = true;
+          for (let i = 0; i < nodes.length; i += 10) {
+            const batch = nodes.slice(i, i + 10);
+            await Promise.all(batch.map(async ({ node, orig }) => {
+              if (!orig) return;
+              const translated = await translateText(orig, lang);
+              _tracked.add(node);
+              node.textContent = translated;
+            }));
+            if (lang !== _lastLang) break; // user changed lang mid-translate
+          }
+          _translating = false;
+        }
+
+        // ── Live translation — Particle/Aura Labs (and most of the rest
+        // of the app) build their panels with JS *after* the page loads,
+        // often well after the person already picked a language. A single
+        // pass over document.body at that moment can only ever translate
+        // whatever happened to already be in the DOM, so anything
+        // rendered later (opening a Segment, adding a system, any list
+        // that (re)builds its rows) stayed in Portuguese no matter what
+        // was selected. This keeps translating as new content shows up,
+        // instead of only translating one snapshot in time.
+        let _pendingNodes = [];
+        let _flushTimer = null;
+        function scheduleFlush() {
+          if (_flushTimer) return;
+          _flushTimer = setTimeout(async () => {
+            _flushTimer = null;
+            const batch = _pendingNodes; _pendingNodes = [];
+            if (!batch.length || !_lastLang) return;
+            const pairs = batch.map(node => ({ node, orig: node.textContent.trim() }));
+            _origTexts.push(...pairs);
+            await translateNodes(pairs, _lastLang);
+          }, 200);
+        }
+        const observer = new MutationObserver(mutations => {
+          if (!_lastLang) return; // nothing selected — leave new content alone
+          for (const m of mutations) {
+            if (m.type === 'characterData') {
+              const n = m.target;
+              if (!_tracked.has(n) && isTranslatableNode(n)) _pendingNodes.push(n);
+            } else {
+              m.addedNodes.forEach(added => {
+                if (added.nodeType === Node.TEXT_NODE) {
+                  if (!_tracked.has(added) && isTranslatableNode(added)) _pendingNodes.push(added);
+                } else if (added.nodeType === Node.ELEMENT_NODE) {
+                  getTextNodes(added).forEach(n => { if (!_tracked.has(n)) _pendingNodes.push(n); });
+                }
+              });
+            }
+          }
+          if (_pendingNodes.length) scheduleFlush();
+        });
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 
         sel.addEventListener('change', async () => {
           const lang = sel.value;
@@ -1871,39 +1950,23 @@
 
           if (!lang) {
             // Restore originals
-            if (_origTexts) {
-              _origTexts.forEach(({ node, orig }) => { node.textContent = orig; });
-              _origTexts = null;
-            }
+            _origTexts.forEach(({ node, orig }) => { node.textContent = orig; });
+            _origTexts = [];
             status.textContent = '';
             return;
           }
 
           // Capture originals on first translate
-          if (!_origTexts) {
-            const nodes = getTextNodes(document.body);
-            _origTexts = nodes.map(n => ({ node: n, orig: n.textContent.trim() }));
+          if (!_origTexts.length) {
+            _origTexts = getTextNodes(document.body).map(n => ({ node: n, orig: n.textContent.trim() }));
           } else {
-            // Restore originals before re-translating
+            // Re-translating into a different language — restore first.
             _origTexts.forEach(({ node, orig }) => { node.textContent = orig; });
           }
 
           status.textContent = '⏳ Traduzindo...';
-          let done = 0;
-          const total = _origTexts.length;
-
-          // Batch translate in groups of 10 to avoid rate limiting
-          for (let i = 0; i < _origTexts.length; i += 10) {
-            const batch = _origTexts.slice(i, i + 10);
-            await Promise.all(batch.map(async ({ node, orig }) => {
-              if (!orig) return;
-              const translated = await translateText(orig, lang);
-              node.textContent = translated;
-              done++;
-            }));
-            if (lang !== _lastLang) return; // user changed lang mid-translate
-          }
-          status.textContent = `✓ ${done} textos traduzidos`;
+          await translateNodes(_origTexts, lang);
+          if (lang === _lastLang) status.textContent = `✓ ${_origTexts.length} textos traduzidos`;
         });
       })();
 
@@ -2199,13 +2262,14 @@
     function selectParticleSystem(sys, opts = {}) {
       const next = sys || null;
       _activeSystem = next;
-      _expandedAura = null; // Stack panel is shared with Auras — picking a
-                             // particle system deselects any active aura.
+      _expandedAura = null; // Stack panel is shared with Auras/Lightning —
+      _expandedLightning = null; // picking a particle system deselects both.
       renderStack(next);
       refreshPalette();
       refreshParticlesList();
       refreshHierarchy();
       refreshAurasList();
+      refreshLightningsList();
       if (opts.cat) openLabsCat(opts.cat);
     }
 
@@ -2388,6 +2452,7 @@
     // inline below the list, so selecting an aura behaves just like
     // selecting a particle system.
     let _expandedAura = null;
+    let _expandedLightning = null;
     function refreshAurasList() {
       const lab  = window._nexusAuraLab;
       const list = document.getElementById('labs-auras-list');
@@ -2426,12 +2491,98 @@
     function selectAura(sys) {
       _expandedAura = sys || null;
       _activeSystem = null;
+      _expandedLightning = null;
       renderAuraStack(_expandedAura);
       refreshAurasList();
+      refreshLightningsList();
       refreshParticlesList();
       refreshPalette();
       if (_expandedAura) openLabsCat('stack');
     }
+
+    // ── Lightning (Particle Labs) — same AuraSystem/Lightning code as the
+    // Aura's own Lightning section (see auraLabs.js's AuraLab.
+    // createLightning), just living directly in the normal Sistema tab
+    // instead of behind the Aura Labs segment.
+    function refreshLightningsList() {
+      const lab  = window._nexusAuraLab;
+      const list = document.getElementById('labs-lightnings-list');
+      if (!list) return;
+      list.innerHTML = '';
+      if (!lab) { list.innerHTML = '<div class="labs-plist-empty">Engine não pronto</div>'; return; }
+      const systems = lab.getLightningSystems();
+      if (!systems.length) { list.innerHTML = '<div class="labs-plist-empty">Nenhum lightning ainda</div>'; return; }
+      systems.forEach(sys => {
+        const item = document.createElement('div');
+        item.className = 'labs-plist-item' + (sys === _expandedLightning ? ' active' : '');
+        item.innerHTML = `
+          <span class="labs-plist-icon">${iconSVG('⚡')}</span>
+          <span class="labs-plist-name">${sys.name || 'Lightning'}</span>
+          <div class="labs-plist-actions">
+            <button class="labs-plist-del" title="Deletar">✕</button>
+          </div>`;
+        item.addEventListener('click', e => {
+          if (e.target.classList.contains('labs-plist-del')) return;
+          selectLightning((_expandedLightning === sys) ? null : sys);
+        });
+        item.querySelector('.labs-plist-del').addEventListener('click', e => {
+          e.stopPropagation();
+          lab.removeLightning(sys);
+          if (_expandedLightning === sys) selectLightning(null);
+          else refreshLightningsList();
+          _toast('Lightning removido');
+        });
+        list.appendChild(item);
+      });
+    }
+
+    function selectLightning(sys) {
+      _expandedLightning = sys || null;
+      _activeSystem = null;
+      _expandedAura = null;
+      renderLightningStack(_expandedLightning);
+      refreshLightningsList();
+      refreshAurasList();
+      refreshParticlesList();
+      refreshPalette();
+      if (_expandedLightning) openLabsCat('stack');
+    }
+
+    function renderLightningStack(sys) {
+      const noSel   = document.getElementById('lab-no-sel-stack');
+      const content = document.getElementById('labs-stack-content');
+      if (!noSel || !content) return;
+      if (!sys) { noSel.style.display = ''; content.style.display = 'none'; content.innerHTML = ''; return; }
+      noSel.style.display = 'none'; content.style.display = '';
+      content.innerHTML = '';
+      const attachSection = document.createElement('div'); attachSection.className = 'stack-section';
+      attachSection.appendChild(buildAttachCard(sys));
+      content.appendChild(attachSection);
+      content.appendChild(buildAuraLightningSection(sys));
+      content.appendChild(buildAuraEventSection(sys));
+    }
+
+    function renderLightningPalette(sys) {
+      const titleEl = document.getElementById('labsPaletteTitle');
+      const hintEl  = document.getElementById('labsPaletteHint');
+      const listEl  = document.getElementById('labsPaletteList');
+      document.getElementById('labsPage2Bespoke')?.classList.add('hidden');
+      if (hintEl) hintEl.style.display = 'none';
+      if (titleEl) titleEl.textContent = `Lightning — ${sys.name || 'Lightning'}`;
+      listEl.style.display = '';
+      listEl.innerHTML = '';
+      const attachSection = document.createElement('div'); attachSection.className = 'stack-section';
+      attachSection.appendChild(buildAttachCard(sys));
+      listEl.appendChild(attachSection);
+      listEl.appendChild(buildAuraLightningSection(sys));
+      listEl.appendChild(buildAuraEventSection(sys));
+    }
+    document.getElementById('lab-add-lightning-from-list')?.addEventListener('click', () => {
+      if (!window._nexusAuraLab) return;
+      const n = window._nexusAuraLab.getLightningSystems().length + 1;
+      selectLightning(window._nexusAuraLab.createLightning({ name: `Lightning ${n}` }));
+    });
+    window.addEventListener('labs-systems-changed', refreshLightningsList);
 
     // Shared by the Stack-tab aura editor AND the Segments→Aura left-panel
     // view (renderAuraPalette below) — one set of controls, two places it
@@ -3184,10 +3335,11 @@
       btn.addEventListener('click', () => {
         _paletteCat = btn.dataset.paletteCat;
         _expandedAura = null; // these are all particle-system browsing tabs; an
-                               // active aura would otherwise shadow them in refreshPalette()
+        _expandedLightning = null; // active aura/lightning would otherwise shadow them in refreshPalette()
         document.querySelectorAll('.labsPaletteBtn').forEach(b => b.classList.toggle('active', b === btn));
         showPage2Bespoke(_paletteCat === 'page2style' ? 'style' : (_paletteCat === 'page2animation' ? 'animation' : null));
         refreshAurasList();
+        refreshLightningsList();
         refreshPalette();
       });
     });
@@ -3198,6 +3350,7 @@
       const listEl  = document.getElementById('labsPaletteList');
       if (!listEl) return;
       if (_expandedAura) { renderAuraPalette(_expandedAura); return; }
+      if (_expandedLightning) { renderLightningPalette(_expandedLightning); return; }
       if (_labsSegment === 'trail') { renderTrailPalette(); return; }
       if (_labsSegment === 'aura') {
         // No aura selected right now (e.g. the last one was just deleted)
@@ -3696,30 +3849,63 @@
       _toast('Nova partícula criada');
     }
 
-    function loadPreset(id) {
+    // ── Custom Presets — replaces the old curated PARTICLE_PRESETS picker.
+    // A preset here is just a named snapshot of whichever particle system
+    // is active when you save it (its full module config), kept in
+    // localStorage so it survives closing the app/tab, not just the
+    // session. PARTICLE_PRESETS itself is untouched in particle-engine.js
+    // (still there for anything else that might reference it) — this only
+    // changes what the "Presets" button shows and does.
+    const CUSTOM_PRESETS_KEY = 'nexusCustomParticlePresets';
+    function _loadCustomPresets() {
+      try { return JSON.parse(localStorage.getItem(CUSTOM_PRESETS_KEY) || '[]'); }
+      catch { return []; }
+    }
+    function _saveCustomPresets(list) {
+      try { localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(list)); }
+      catch (e) { _toast('Não deu pra salvar (armazenamento cheio ou bloqueado)'); }
+    }
+    function loadCustomPreset(id) {
+      const list = _loadCustomPresets();
+      const preset = list.find(p => p.id === id);
       const lab = window._nexusParticleLab;
-      const PE  = window._ParticleEngine;
-      if (!lab || !PE) return;
-      const presets = PE.PARTICLE_PRESETS;
-      if (!presets?.[id]) return;
-      const sys = lab.createFromPreset(id);
+      if (!preset || !lab) return;
+      const sys = lab.createFromCustomPreset(preset.name, preset.config);
       selectParticleSystem(sys, { cat: 'stack' });
       document.getElementById('lab-preset-picker')?.classList.add('hidden');
-      _toast(presets[id]?.label || id);
+      _toast(preset.name);
     }
-
-    function buildPresetGrid() {
-      const PE = window._ParticleEngine;
-      if (!PE?.PARTICLE_PRESETS) return;
+    function deleteCustomPreset(id) {
+      _saveCustomPresets(_loadCustomPresets().filter(p => p.id !== id));
+      buildPresetGrid(true);
+    }
+    function buildPresetGrid(force = false) {
       const list = document.getElementById('lab-preset-list');
-      if (!list || list.childElementCount > 0) return;
-      const presets = PE.PARTICLE_PRESETS;
-      Object.entries(presets).forEach(([id, p]) => {
+      if (!list) return;
+      if (!force && list.dataset.built === '1') return;
+      list.dataset.built = '1';
+      list.innerHTML = '';
+      const presets = _loadCustomPresets();
+      if (!presets.length) {
+        const empty = document.createElement('div');
+        empty.className = 'labs-palette-hint'; empty.style.display = 'block';
+        empty.textContent = 'Nenhum preset salvo ainda. Selecione uma partícula e toque no + aqui embaixo pra salvar a configuração dela como preset.';
+        list.appendChild(empty);
+        return;
+      }
+      presets.forEach(p => {
         const btn = document.createElement('button');
         btn.className = 'labs-preset-item';
-        btn.dataset.cat = p.category || 'all';
-        btn.innerHTML = `<span class="labs-preset-icon">${iconSVG(p.icon||'✨')}</span><span>${p.label||id}</span>`;
-        btn.addEventListener('click', () => loadPreset(id));
+        btn.innerHTML = `<span class="labs-preset-icon">${iconSVG('✨')}</span><span>${p.name}</span>
+          <span class="labs-preset-del" title="Remover">✕</span>`;
+        btn.addEventListener('click', e => {
+          if (e.target.classList.contains('labs-preset-del')) return;
+          loadCustomPreset(p.id);
+        });
+        btn.querySelector('.labs-preset-del').addEventListener('click', e => {
+          e.stopPropagation();
+          deleteCustomPreset(p.id);
+        });
         list.appendChild(btn);
       });
     }
@@ -3732,6 +3918,33 @@
     });
     document.getElementById('lab-preset-close')?.addEventListener('click', () =>
       document.getElementById('lab-preset-picker')?.classList.add('hidden'));
+    document.getElementById('lab-preset-new-btn')?.addEventListener('click', () => {
+      if (!_activeSystem) { _toast('Selecione uma partícula primeiro'); return; }
+      const row = document.getElementById('lab-preset-name-row');
+      const input = document.getElementById('lab-preset-name-input');
+      if (!row || !input) return;
+      row.classList.remove('hidden');
+      input.value = _activeSystem.name || '';
+      input.focus();
+    });
+    document.getElementById('lab-preset-name-cancel')?.addEventListener('click', () =>
+      document.getElementById('lab-preset-name-row')?.classList.add('hidden'));
+    function _confirmSaveCustomPreset() {
+      const input = document.getElementById('lab-preset-name-input');
+      const name = (input?.value || '').trim();
+      if (!name) { _toast('Dá um nome pro preset'); return; }
+      if (!_activeSystem) return;
+      const list = _loadCustomPresets();
+      list.push({ id: `preset_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, name, config: _activeSystem.getConfig() });
+      _saveCustomPresets(list);
+      document.getElementById('lab-preset-name-row')?.classList.add('hidden');
+      buildPresetGrid(true);
+      _toast('Preset salvo');
+    }
+    document.getElementById('lab-preset-name-confirm')?.addEventListener('click', _confirmSaveCustomPreset);
+    document.getElementById('lab-preset-name-input')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') _confirmSaveCustomPreset();
+    });
     document.getElementById('lab-btn-preview')?.addEventListener('click', () => {
       if (_activeSystem) { _activeSystem.reset(); _activeSystem.play(); }
     });
@@ -3812,8 +4025,11 @@
       const auraLab = window._nexusAuraLab;
       const hasParticles = (lab?.getSystems().length || 0) > 0;
       const hasAuras = (auraLab?.getSystems().length || 0) > 0;
-      if (!hasParticles && !hasAuras) { _toast('Nada para salvar ainda'); return; }
-      const extra = hasAuras ? { auras: auraLab.serializeAuras() } : {};
+      const hasLightnings = (auraLab?.getLightningSystems().length || 0) > 0;
+      if (!hasParticles && !hasAuras && !hasLightnings) { _toast('Nada para salvar ainda'); return; }
+      const extra = {};
+      if (hasAuras) extra.auras = auraLab.serializeAuras();
+      if (hasLightnings) extra.lightnings = auraLab.serializeLightnings();
       const ok = await lab.exportNex('particles.nex', extra);
       _toast(ok ? 'particles.nex salvo' : 'Falha ao salvar');
     });
@@ -3829,31 +4045,24 @@
         if (window._nexusAuraLab && Array.isArray(result.auras)) {
           window._nexusAuraLab.restoreAuras(result.auras);
         }
+        if (window._nexusAuraLab && Array.isArray(result.lightnings)) {
+          window._nexusAuraLab.restoreLightnings(result.lightnings);
+        }
         refreshPalette();
         refreshParticlesList();
         refreshAurasList();
+        refreshLightningsList();
         _toast('Carregado');
       } else { _toast(result?.error || 'Falha ao carregar'); }
       e.target.value = '';
     });
 
-    document.querySelectorAll('.labs-preset-cat-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.labs-preset-cat-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const cat = btn.dataset.cat;
-        document.querySelectorAll('.labs-preset-item').forEach(item => {
-          item.style.display = (cat === 'all' || item.dataset.cat === cat) ? '' : 'none';
-        });
-      });
-    });
-
     // ── Init ─────────────────────────────────────────────────────
     window.addEventListener('_nexusEngineReady', () => {
-      setTimeout(() => { buildPresetGrid(); refreshParticlesList(); refreshAurasList(); refreshPalette(); }, 400);
+      setTimeout(() => { buildPresetGrid(); refreshParticlesList(); refreshAurasList(); refreshLightningsList(); refreshPalette(); }, 400);
     });
     if (document.readyState === 'complete') {
-      setTimeout(() => { buildPresetGrid(); refreshParticlesList(); refreshAurasList(); refreshPalette(); }, 1000);
+      setTimeout(() => { buildPresetGrid(); refreshParticlesList(); refreshAurasList(); refreshLightningsList(); refreshPalette(); }, 1000);
     }
   })();
   </script>
