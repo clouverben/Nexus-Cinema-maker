@@ -2097,7 +2097,19 @@ function addToImportLibrary(root, clips, modelName) {
     flashMessage(`${clips?.length || 0} animação(ões) na Biblioteca`);
 }
 
-function _bakeImportedClip(entry) {
+// Impede duas bakes rodando ao mesmo tempo (ex.: clicar em outra
+// animação da Biblioteca enquanto a primeira ainda está processando).
+let _bakingInProgress = false;
+
+// "Assa" a animação embutida do GLTF em keyframes editáveis, quadro a
+// quadro. É assíncrona e processa em pequenos blocos, cedendo a thread
+// principal (via requestAnimationFrame) entre eles — modelos com muitos
+// ossos/blend shapes têm bastante trabalho aqui, e fazer tudo de uma vez
+// de forma síncrona travava a página inteira até terminar (diferente do
+// carregamento do modelo, que já é assíncrono via loader.parse).
+async function _bakeImportedClip(entry) {
+    if (_bakingInProgress) { flashMessage('Já tem uma animação sendo aplicada, aguarde…'); return; }
+
     const root = findObjectByUUID(entry.rootUuid);
     if (!root) { flashMessage('Modelo de origem não existe mais na cena'); return; }
     const clip = entry.clip;
@@ -2108,48 +2120,58 @@ function _bakeImportedClip(entry) {
     const nodes = nodeNames.map(n => root.getObjectByName(n)).filter(Boolean);
     if (!nodes.length) { flashMessage('Não achei os ossos/objetos dessa animação no modelo'); return; }
 
-    const mixer  = new THREE.AnimationMixer(root);
-    const action = mixer.clipAction(clip);
-    action.reset(); action.play(); action.paused = true;
+    _bakingInProgress = true;
+    flashMessage('Aplicando animação…');
+    try {
+        const mixer  = new THREE.AnimationMixer(root);
+        const action = mixer.clipAction(clip);
+        action.reset(); action.play(); action.paused = true;
 
-    const totalFrames = Math.max(1, Math.ceil(clip.duration * fps));
-    const clipIdByUuid = {};
-    nodes.forEach(obj => {
-        const id = createNewClip(obj.uuid);
-        const c  = AnimState.clips[obj.uuid].find(cc => cc.id === id);
-        if (c) { c.name = clip.name || entry.rootName; c.duration = totalFrames; }
-        clipIdByUuid[obj.uuid] = id;
-    });
-
-    for (let f = 0; f <= totalFrames; f++) {
-        mixer.setTime(f / fps);
+        const totalFrames = Math.max(1, Math.ceil(clip.duration * fps));
+        const clipIdByUuid = {};
         nodes.forEach(obj => {
-            const clipId = clipIdByUuid[obj.uuid];
-            if (!AnimState.keyframes[obj.uuid]) AnimState.keyframes[obj.uuid] = {};
-            if (!AnimState.keyframes[obj.uuid][clipId]) AnimState.keyframes[obj.uuid][clipId] = {};
-            const isBone = !!obj.isBone;
-            AnimState.keyframes[obj.uuid][clipId][f] = {
-                position: { x: obj.position.x, y: obj.position.y, z: obj.position.z },
-                rotation: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z, order: obj.rotation.order },
-                scale:    { x: obj.scale.x,    y: obj.scale.y,    z: obj.scale.z },
-                interp:   'linear',
-                isBone,
-                parentSkinnedMeshUUID: isBone ? _findSkinnedMeshForBone(obj) : null,
-            };
+            const id = createNewClip(obj.uuid);
+            const c  = AnimState.clips[obj.uuid].find(cc => cc.id === id);
+            if (c) { c.name = clip.name || entry.rootName; c.duration = totalFrames; }
+            clipIdByUuid[obj.uuid] = id;
         });
+
+        const FRAMES_PER_CHUNK = 8; // pausa curta a cada N quadros
+        for (let f = 0; f <= totalFrames; f++) {
+            mixer.setTime(f / fps);
+            nodes.forEach(obj => {
+                const clipId = clipIdByUuid[obj.uuid];
+                if (!AnimState.keyframes[obj.uuid]) AnimState.keyframes[obj.uuid] = {};
+                if (!AnimState.keyframes[obj.uuid][clipId]) AnimState.keyframes[obj.uuid][clipId] = {};
+                const isBone = !!obj.isBone;
+                AnimState.keyframes[obj.uuid][clipId][f] = {
+                    position: { x: obj.position.x, y: obj.position.y, z: obj.position.z },
+                    rotation: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z, order: obj.rotation.order },
+                    scale:    { x: obj.scale.x,    y: obj.scale.y,    z: obj.scale.z },
+                    interp:   'linear',
+                    isBone,
+                    parentSkinnedMeshUUID: isBone ? _findSkinnedMeshForBone(obj) : null,
+                };
+            });
+            if (f % FRAMES_PER_CHUNK === 0) {
+                await new Promise(resolve => requestAnimationFrame(resolve));
+            }
+        }
+        mixer.stopAllAction();
+        mixer.uncacheClip(clip);
+
+        // Deixa o objeto principal (root, ou o primeiro nó afetado) como o
+        // clipe ativo/exibido, e some da biblioteca já que foi usada.
+        const primary = nodes.find(n => n === root) || nodes[0];
+        AnimState.activeClip[primary.uuid] = clipIdByUuid[primary.uuid];
+        AnimState.importLibrary = AnimState.importLibrary.filter(e => e.id !== entry.id);
+        if (AnimState.selectedImportId === entry.id) AnimState.selectedImportId = null;
+
+        buildRuler(); refreshDiamonds(); renderClipsSection(); renderImportLibrary(); refreshAnimSidebar();
+        flashMessage(`"${clip.name || entry.rootName}" adicionada — ${nodes.length} objeto(s), ${totalFrames} frames`);
+    } finally {
+        _bakingInProgress = false;
     }
-    mixer.stopAllAction();
-    mixer.uncacheClip(clip);
-
-    // Deixa o objeto principal (root, ou o primeiro nó afetado) como o
-    // clipe ativo/exibido, e some da biblioteca já que foi usada.
-    const primary = nodes.find(n => n === root) || nodes[0];
-    AnimState.activeClip[primary.uuid] = clipIdByUuid[primary.uuid];
-    AnimState.importLibrary = AnimState.importLibrary.filter(e => e.id !== entry.id);
-    if (AnimState.selectedImportId === entry.id) AnimState.selectedImportId = null;
-
-    buildRuler(); refreshDiamonds(); renderClipsSection(); renderImportLibrary(); refreshAnimSidebar();
-    flashMessage(`"${clip.name || entry.rootName}" adicionada — ${nodes.length} objeto(s), ${totalFrames} frames`);
 }
 
 function renderImportLibrary() {
