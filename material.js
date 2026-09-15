@@ -83,13 +83,8 @@ function buildHTML() {
         `
           ${row('Cor', '<input id="matColor" type="color" value="#d7dde7">')}
           ${row('Opacidade', '<input id="matOpacity" type="number" min="0" max="1" step="0.01" value="1">')}
-          ${row('Suavidade', '<input id="matSmoothness" type="number" min="0" max="180" step="1" value="180">')}
           ${row('Roughness', '<input id="matRoughness" type="number" min="0" max="1" step="0.01" value="0.55">')}
           ${row('Metalness', '<input id="matMetalness" type="number" min="0" max="1" step="0.01" value="0.08">')}
-          ${row('Spec I', '<input id="matSpecularIntensity" type="number" min="0" max="1" step="0.01" value="1">')}
-          ${row('Spec C', '<input id="matSpecularColor" type="color" value="#ffffff">')}
-          ${row('Emiss C', '<input id="matEmissiveColor" type="color" value="#000000">')}
-          ${row('Emiss I', '<input id="matEmissiveIntensity" type="number" min="0" max="10" step="0.01" value="0">')}
         `
       )}
 
@@ -380,12 +375,22 @@ function currentMaterial() {
 
 function setDisabled(disabled) {
   [
-    'matColor','matOpacity','matSmoothness','matRoughness','matMetalness','matSpecularIntensity','matSpecularColor',
-    'matEmissiveColor','matEmissiveIntensity','matClearcoat','matClearcoatRoughness','matTransmission',
+    'matColor','matOpacity','matRoughness','matMetalness',
+    'matClearcoat','matClearcoatRoughness','matTransmission',
     'matThickness','matIOR','matSheen','matSheenRoughness','matIridescence','matIridescenceIOR',
     'matIriMin','matIriMax','matAttenuationDistance'
   ].forEach((id) => {
     const el = state.root.querySelector(`#${id}`);
+    if (el) el.disabled = disabled;
+  });
+
+  // Especularidade/Suavidade/Emissão live in the Material panel extension now
+  // (outside state.root) — look them up globally instead.
+  [
+    'matSmoothness', 'matSpecularIntensity', 'matSpecularColor',
+    'matEmissiveColor', 'matEmissiveIntensity',
+  ].forEach((id) => {
+    const el = document.getElementById(id);
     if (el) el.disabled = disabled;
   });
 
@@ -411,17 +416,17 @@ function sync() {
   state.syncing = true;
   state.root.querySelector('#matColor').value = `#${mat.color.getHexString()}`;
   state.root.querySelector('#matOpacity').value = mat.opacity ?? 1;
-  const smoothnessEl = state.root.querySelector('#matSmoothness');
+  const smoothnessEl = document.getElementById('matSmoothness');
   if (smoothnessEl) {
     const storedSmoothness = Number(obj.userData?.ncmSmoothness);
     smoothnessEl.value = Number.isFinite(storedSmoothness) ? storedSmoothness : (mat.flatShading ? 0 : 180);
   }
   state.root.querySelector('#matRoughness').value = mat.roughness ?? 0.55;
   state.root.querySelector('#matMetalness').value = mat.metalness ?? 0.08;
-  state.root.querySelector('#matSpecularIntensity').value = mat.specularIntensity ?? 1;
-  state.root.querySelector('#matSpecularColor').value = `#${(mat.specularColor || new THREE.Color(1,1,1)).getHexString()}`;
-  state.root.querySelector('#matEmissiveColor').value = `#${(mat.emissive || new THREE.Color(0,0,0)).getHexString()}`;
-  state.root.querySelector('#matEmissiveIntensity').value = mat.emissiveIntensity ?? 0;
+  const specIEl = document.getElementById('matSpecularIntensity'); if (specIEl) specIEl.value = mat.specularIntensity ?? 1;
+  const specCEl = document.getElementById('matSpecularColor'); if (specCEl) specCEl.value = `#${(mat.specularColor || new THREE.Color(1,1,1)).getHexString()}`;
+  const emisCEl = document.getElementById('matEmissiveColor'); if (emisCEl) emisCEl.value = `#${(mat.emissive || new THREE.Color(0,0,0)).getHexString()}`;
+  const emisIEl = document.getElementById('matEmissiveIntensity'); if (emisIEl) emisIEl.value = mat.emissiveIntensity ?? 0;
   state.root.querySelector('#matClearcoat').value = mat.clearcoat ?? 0;
   state.root.querySelector('#matClearcoatRoughness').value = mat.clearcoatRoughness ?? 0;
   state.root.querySelector('#matTransmission').value = mat.transmission ?? 0;
@@ -480,6 +485,52 @@ function bindColor(id, fn) {
   });
 }
 
+// Same as bindNumber/bindColor, but for fields that live OUTSIDE state.root —
+// Especularidade/Suavidade/Emissão now live in the Material panel extension
+// (#panelExtensionMaterial), a separate, statically-built part of the DOM.
+function bindGlobalNumber(id, fn) {
+  document.getElementById(id)?.addEventListener('input', () => {
+    if (state.syncing) return;
+    const mat = currentMaterial();
+    if (!mat) return;
+    const raw = document.getElementById(id).value;
+    const num = raw === 'Infinity' ? Infinity : Number(raw);
+    if (Number.isNaN(num)) return;
+    fn(mat, num);
+    mat.needsUpdate = true;
+    markSceneDirty();
+  });
+}
+function bindGlobalColor(id, fn) {
+  document.getElementById(id)?.addEventListener('input', () => {
+    if (state.syncing) return;
+    const mat = currentMaterial();
+    if (!mat) return;
+    fn(mat, document.getElementById(id).value);
+    mat.needsUpdate = true;
+    markSceneDirty();
+  });
+}
+
+// Especularidade/Suavidade/Emissão categories in the Material panel
+// extension — same collapsible-section idea as the main tab's own
+// Base/PBR/Texturas groups (see state.root.querySelectorAll('[data-toggle]')
+// above), just wired against `document` since this markup lives outside
+// state.root (#panelExtensionMaterial, not #materialRoot).
+function initMaterialExtensionAccordion() {
+  document.querySelectorAll('#matExtAccordion [data-toggle]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const body = document.getElementById(btn.dataset.toggle);
+      const nowOpen = body?.classList.toggle('hidden') === false;
+      btn.classList.toggle('active', nowOpen);
+    });
+  });
+  // Especularidade starts open (most commonly tweaked); the other two stay
+  // collapsed until picked, same "start collapsed" feel as the main tab.
+  document.getElementById('matExtSpecularBody')?.classList.remove('hidden');
+  document.querySelector('#matExtAccordion [data-toggle="matExtSpecularBody"]')?.classList.add('active');
+}
+
 function applyTexture(slot, file) {
   const mesh = _resolveMesh(getSelected());
   if (!mesh || !file) return;
@@ -534,6 +585,7 @@ export function initMaterialUI() {
   // Material Lab is docked in the right panel so the Material controls can
   // remain focused while the object list stays visible.
   initProceduralPBRPanel(state.root.querySelector('#proceduralPBRRoot'), document.getElementById('materialLabRoot'));
+  initMaterialExtensionAccordion();
 
   state.root.querySelectorAll('.textureBtn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -566,7 +618,7 @@ export function initMaterialUI() {
     m.opacity = v;
     m.transparent = v < 1 || !!m.alphaMap || m.transmission > 0;
   });
-  const smoothnessInput = state.root.querySelector('#matSmoothness');
+  const smoothnessInput = document.getElementById('matSmoothness');
   smoothnessInput?.addEventListener('input', () => {
     const mat = currentMaterial();
     const obj = getSelected();
@@ -587,10 +639,10 @@ export function initMaterialUI() {
   });
   bindNumber('matRoughness', (m, v) => { m.roughness = v; });
   bindNumber('matMetalness', (m, v) => { m.metalness = v; });
-  bindNumber('matSpecularIntensity', (m, v) => { m.specularIntensity = v; });
-  bindColor('matSpecularColor', (m, v) => { m.specularColor.set(v); });
-  bindColor('matEmissiveColor', (m, v) => { m.emissive.set(v); });
-  bindNumber('matEmissiveIntensity', (m, v) => { m.emissiveIntensity = v; });
+  bindGlobalNumber('matSpecularIntensity', (m, v) => { m.specularIntensity = v; });
+  bindGlobalColor('matSpecularColor', (m, v) => { m.specularColor.set(v); });
+  bindGlobalColor('matEmissiveColor', (m, v) => { m.emissive.set(v); });
+  bindGlobalNumber('matEmissiveIntensity', (m, v) => { m.emissiveIntensity = v; });
   bindNumber('matClearcoat', (m, v) => { m.clearcoat = v; });
   bindNumber('matClearcoatRoughness', (m, v) => { m.clearcoatRoughness = v; });
   bindNumber('matTransmission', (m, v) => {

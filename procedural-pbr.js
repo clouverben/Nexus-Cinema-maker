@@ -492,7 +492,13 @@ function build(){
     // Right dock is intentionally viewer-only. Never inject map/settings cards here.
     labRoot.innerHTML=`<div class="procLabViewerOnly">
       <div class="procLabHeader"><div><div class="procLabTitle">Visualizador</div><div class="procLabSub">Preview PBR</div></div></div>
-      <canvas id="procPbrPreview" class="procPbrPreview" width="360" height="200"></canvas>
+      <div class="procPbrPreviewWrap">
+        <canvas id="procPbrPreview" class="procPbrPreview" width="360" height="200"></canvas>
+        <div class="procPbrViewportBadge" title="Modo de sombreamento">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none"/></svg>
+          <span>Sólido</span>
+        </div>
+      </div>
       <div class="procPreviewToolbar" role="group" aria-label="Objeto do preview">
         <button type="button" class="procPreviewShape active" data-preview-shape="sphere">Esfera</button>
         <button type="button" class="procPreviewShape" data-preview-shape="cube">Cubo</button>
@@ -533,7 +539,6 @@ function build(){
   });
 
   sync();
-  updatePreview();
 }
 
 let previewRenderer=null, previewScene=null, previewCamera=null, previewMesh=null, previewFloor=null, previewFrame=0, previewLastRender=0, previewResizeObserver=null, previewDirty=true, previewUpdateTimer=0;
@@ -570,7 +575,7 @@ function ensurePreview(){
     previewRenderer.outputColorSpace=THREE.SRGBColorSpace;
     previewRenderer.toneMapping=THREE.ACESFilmicToneMapping;
     previewRenderer.toneMappingExposure=1.0;
-    previewScene=new THREE.Scene(); previewScene.background=new THREE.Color(0x0b0d12);
+    previewScene=new THREE.Scene(); previewScene.background=new THREE.Color(0x393939);
     previewCamera=new THREE.PerspectiveCamera(32,1,.1,100); previewCamera.position.set(0,0.1,4.4);
     const hemi=new THREE.HemisphereLight(0xf4f7ff,0x171b22,1.55);
     const key=new THREE.DirectionalLight(0xffffff,3.0); key.position.set(2.8,3.5,4.2); key.castShadow=true; key.shadow.mapSize.set(512,512);
@@ -584,8 +589,6 @@ function ensurePreview(){
     const loop=(now)=>{
       previewFrame=requestAnimationFrame(loop);
       if(!previewMesh || !labState.previewEnabled || !previewRenderer) return;
-      previewMesh.rotation.y+=0.0065;
-      previewMesh.rotation.x=Math.sin(now*0.00035)*0.045;
       const mobile=window.matchMedia?.('(max-width: 600px)').matches;
       const interval=mobile?45:33;
       if(!previewDirty && now-previewLastRender<interval) return;
@@ -624,6 +627,15 @@ function updatePreview(){
     }catch(e){ console.warn('[NCM PBR] preview update failed',e); }
   });
 }
+function _resetPreviewMaterial(){
+  if(!previewMesh) return;
+  const mat=previewMesh.material;
+  for(const t of [mat.map,mat.normalMap,mat.roughnessMap,mat.metalnessMap]) t?.dispose?.();
+  mat.map=null; mat.normalMap=null; mat.roughnessMap=null; mat.metalnessMap=null;
+  mat.color.set(0xffffff); mat.roughness=.55; mat.metalness=.05; mat.bumpScale=0;
+  mat.needsUpdate=true;
+  previewDirty=true;
+}
 function sync(){
   const mesh=getMesh();
   MAPS.forEach(([slot])=>{
@@ -635,6 +647,13 @@ function sync(){
   const labRoot=state.labRoot || document.getElementById('materialLabRoot');
   const lock=labRoot?.querySelector('#procLockSeed'); if(lock) lock.checked=!!labState.lockSeed;
   labRoot?.querySelectorAll('[data-preview-shape]').forEach(b=>b.classList.toggle('active',b.dataset.previewShape===labState.previewShape));
+  // Always make sure the viewer itself exists and is showing something —
+  // a plain white, static primitive by default. Switching selection alone
+  // should never leave a stale bake on screen: show the newly-selected
+  // object's procedural material if it has one, otherwise stay white.
+  ensurePreview();
+  if(mesh?.material?.userData?.ncmProceduralPBR) updatePreview();
+  else _resetPreviewMaterial();
 }
 export function getProceduralPBRState(){
   return { size:state.size, maps:JSON.parse(JSON.stringify(state.mapSettings)), lab:JSON.parse(JSON.stringify(labState)) };
