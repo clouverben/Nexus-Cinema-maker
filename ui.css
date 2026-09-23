@@ -62,6 +62,17 @@ body {
 }
 canvas { display: block; width: 100%; height: 100%; -webkit-tap-highlight-color: transparent; }
 
+/* Global thin desktop-style scrollbar fallback — most scrollable panels
+   already have their own bespoke thin scrollbar rules further down; this
+   just covers anything that doesn't, so nothing ever falls back to a
+   mobile-browser default (fat, auto-hiding) scrollbar. */
+* { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.16) transparent; }
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(255,255,255,.16); border-radius: var(--r-xs); }
+*::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.26); }
+*::-webkit-scrollbar-corner { background: transparent; }
+
 /* ── CSS vars ──────────────────────────────────────────────────────────────── */
 :root {
   /* Layout */
@@ -487,8 +498,7 @@ canvas { display: block; width: 100%; height: 100%; -webkit-tap-highlight-color:
   border-radius: var(--r-sm);
   padding: 4px;
   z-index: 200;
-  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
-  backdrop-filter: blur(16px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
 }
 
 .actionMenuItem {
@@ -890,12 +900,11 @@ canvas { display: block; width: 100%; height: 100%; -webkit-tap-highlight-color:
   position: fixed;
   bottom: calc(var(--bar-h-bot) + 10px);
   left: 50%; transform: translateX(-50%);
-  background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(6px);
+  background: rgba(0,0,0,0.72);
   border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 20px;
-  padding: 3px 12px;
-  font-size: var(--fs-xs); font-family: monospace;
+  border-radius: var(--r-sm);
+  padding: 3px 10px;
+  font-size: var(--fs-xs); font-family: var(--font-mono);
   color: rgba(255,255,255,0.7);
   pointer-events: none;
   transition: opacity .2s; z-index: 999;
@@ -1965,7 +1974,7 @@ body.labs-preview-mode #axesGizmo2D { display: none; }
 /* ── Preset picker overlay ───────────────────────────────────────── */
 .labs-preset-picker {
   position: fixed; inset: 0; z-index: 13000;
-  background: rgba(0,0,0,.65); backdrop-filter: blur(4px);
+  background: rgba(0,0,0,.75);
   display: flex; align-items: center; justify-content: center;
 }
 .labs-preset-picker.hidden { display: none !important; }
@@ -2027,7 +2036,7 @@ body.labs-preview-mode .labsIconMenuBackdrop {
 .labsPreviewCounter {
   position: absolute; left: 14px; bottom: 14px;
   padding: 6px 10px;
-  background: rgba(8,10,22,.72); backdrop-filter: blur(6px);
+  background: rgba(8,10,22,.92);
   border: 1px solid rgba(255,255,255,.12); border-radius: var(--r-sm);
   font-size: var(--fs-xs); font-weight: 700; color: rgba(255,255,255,.85);
   letter-spacing: .01em; font-variant-numeric: tabular-nums;
@@ -2037,7 +2046,7 @@ body.labs-preview-mode .labsIconMenuBackdrop {
   position: absolute; right: 14px; top: 14px;
   pointer-events: auto;
   width: 34px; height: 34px; font-size: 15px;
-  background: rgba(8,10,22,.72); backdrop-filter: blur(6px);
+  background: rgba(8,10,22,.92);
 }
 
 /* ── Labs icon menu (spec #9) — small dropdown under the top-bar button ── */
@@ -2385,10 +2394,10 @@ body.labs-preview-mode .labsIconMenuBackdrop {
   position: fixed;
   z-index: 99999;
   pointer-events: auto;
-  filter: drop-shadow(0 8px 32px rgba(0,0,0,.7));
-  transform: scale(0.88);
+  filter: drop-shadow(0 4px 16px rgba(0,0,0,.6));
+  transform: scale(1);
   opacity: 0;
-  transition: transform .18s cubic-bezier(.34,1.56,.64,1), opacity .15s ease;
+  transition: opacity .08s linear;
 }
 .ctx-menu.visible {
   transform: scale(1);
@@ -2401,7 +2410,6 @@ body.labs-preview-mode .labsIconMenuBackdrop {
   border-radius: 4px;
   min-width: 160px;
   overflow: hidden;
-  backdrop-filter: blur(20px);
 }
 .ctx-obj-title {
   padding: 9px 14px 6px;
@@ -2438,8 +2446,7 @@ body.labs-preview-mode .labsIconMenuBackdrop {
   background: rgba(8, 10, 22, 0.97);
   border: 1px solid rgba(167, 139, 250, 0.25);
   border-radius: 4px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04);
-  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
   overflow: hidden;
   /* animation */
   opacity: 0;
@@ -3010,27 +3017,35 @@ body.labs-preview-mode .labsIconMenuBackdrop {
   cursor: pointer;
 }
 
-/* ── Toggle switch — accent-orange when active (shared "on" language across the app) ── */
-.setSwitch { position: relative; display: inline-block; width: 30px; height: 16px; flex-shrink: 0; }
+/* ── Toggle switch — a flat checkbox, not an iOS/Android pill slider.
+   Pill switches are one of the strongest "this is a phone app" signifiers
+   there is; desktop tools (Blender, Resolve, SFM) use checkboxes for every
+   on/off, so that's the language here too. Markup is untouched (still
+   <label class="setSwitch"><input type=checkbox><span class="setSwitchTrack">),
+   only the rendering changed — a small square that fills with the accent
+   color and shows a checkmark when checked. ── */
+.setSwitch { position: relative; display: inline-block; width: 16px; height: 16px; flex-shrink: 0; }
 .setSwitch input { opacity: 0; width: 0; height: 0; }
 .setSwitchTrack {
   position: absolute; inset: 0;
-  background: #1a1a1a;
-  border: 1px solid #111;
-  border-radius: 20px;
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-border);
+  border-radius: var(--r-xs);
   cursor: pointer;
-  transition: background .18s;
+  transition: background .12s, border-color .12s;
 }
 .setSwitchTrack::before {
   content: '';
-  position: absolute; width: 12px; height: 12px;
-  left: 2px; top: 1px;
-  background: rgba(255,255,255,.55);
-  border-radius: 50%;
-  transition: transform .18s, background .18s;
+  position: absolute;
+  left: 5px; top: 2px;
+  width: 3px; height: 7px;
+  border: solid var(--void);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform .1s ease;
 }
 .setSwitch input:checked + .setSwitchTrack { background: var(--accent-orange); border-color: var(--accent-orange); }
-.setSwitch input:checked + .setSwitchTrack::before { transform: translateX(14px); background: #fff; }
+.setSwitch input:checked + .setSwitchTrack::before { transform: rotate(45deg) scale(1); }
 
 /* ── Color row ── */
 .setColorRow {
@@ -3503,24 +3518,27 @@ body.labs-preview-mode .labsIconMenuBackdrop {
 .brLabel { font-size: var(--fs-sm); font-weight: 600; color: rgba(238,242,255,.85); }
 
 /* Toggle switch — shares the app-wide "on" language, see .setSwitch */
-.brToggle { position: relative; display: inline-block; width: 36px; height: 20px; cursor: pointer; }
+.brToggle { position: relative; display: inline-block; width: 16px; height: 16px; cursor: pointer; }
 .brToggle input { opacity: 0; width: 0; height: 0; }
 .brSlider {
   position: absolute; inset: 0;
-  background: rgba(255,255,255,.1);
-  border: 1px solid rgba(255,255,255,.15);
-  border-radius: 20px;
-  transition: background .2s, border-color .2s;
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-border);
+  border-radius: var(--r-xs);
+  transition: background .12s, border-color .12s;
 }
 .brSlider::before {
   content: '';
-  position: absolute; width: 14px; height: 14px;
-  border-radius: 50%; background: #aaa;
-  top: 2px; left: 2px;
-  transition: transform .2s, background .2s;
+  position: absolute;
+  left: 5px; top: 2px;
+  width: 3px; height: 7px;
+  border: solid var(--void);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform .1s ease;
 }
 .brToggle input:checked + .brSlider { background: var(--accent-orange); border-color: var(--accent-orange); }
-.brToggle input:checked + .brSlider::before { transform: translateX(16px); background: #fff; }
+.brToggle input:checked + .brSlider::before { transform: rotate(45deg) scale(1); }
 
 /* BeforeRender active banner */
 .brBanner {
@@ -4814,27 +4832,27 @@ body.launcher-active canvas {
 .shapeKeyNumber { width:100%; min-width:0; box-sizing:border-box; }
 
 /* ── Projects launcher refresh ────────────────────────────────────────── */
-#launcherScreen { background:radial-gradient(circle at 15% 8%,rgba(255,180,72,.09),transparent 28%),radial-gradient(circle at 86% 14%,rgba(88,148,255,.08),transparent 30%),#111318; padding:18px; }
+#launcherScreen { background: #111318; padding:18px; }
 .launcherTop { align-items:center; padding:6px 6px 16px; }
 .launcherEyebrow { margin-bottom:4px; font-size:9px; font-weight:800; letter-spacing:.16em; color:rgba(238,242,255,.34); text-transform:uppercase; }
-.launcherTitle { font-size:28px; letter-spacing:-.025em; }
+.launcherTitle { font-size:22px; letter-spacing:-.01em; font-weight:600; }
 .launcherSubtitle { max-width:520px; font-size:var(--fs-md); color:rgba(238,242,255,.46); }
-.launcherHeaderBtn { display:inline-flex; align-items:center; gap:6px; min-height:38px; border-color:rgba(255,177,74,.25); background:linear-gradient(135deg,rgba(255,177,74,.16),rgba(255,208,50,.07)); color:#ffd18a; box-shadow:0 8px 30px rgba(0,0,0,.18); }
-.launcherHeaderBtn:hover { background:linear-gradient(135deg,rgba(255,177,74,.23),rgba(255,208,50,.10)); }
-.launcherHeaderBtnIcon { font-size:16px; line-height:1; }
-.launcherGrid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; padding:4px 2px 18px; }
-.launcherCard { border-radius:10px; background:rgba(31,34,42,.88); border:1px solid rgba(255,255,255,.075); box-shadow:0 15px 35px rgba(0,0,0,.22); transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease,background .16s ease; }
-.launcherCard:hover { transform:translateY(-2px); border-color:rgba(255,190,98,.34); background:rgba(36,39,48,.96); box-shadow:0 20px 42px rgba(0,0,0,.3); }
-.launcherThumb { aspect-ratio:16 / 10; background:linear-gradient(135deg,#191c23,#101218); }
-.launcherThumbPlaceholder { background:radial-gradient(circle,rgba(255,255,255,.05),transparent 58%); }
-.launcherThumbPlaceholder svg { width:48px; height:48px; opacity:.45; }
-.launcherMeta { padding:11px 11px 12px; }
-.launcherName { font-size:var(--fs-md); }
-.launcherMenuBtn { border-radius:7px; }
-.launcherMenu { top:44px; right:9px; border-radius:8px; background:rgba(10,12,17,.98); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
+.launcherHeaderBtn { display:inline-flex; align-items:center; gap:6px; min-height:32px; border-color:var(--btn-border); background:var(--btn-bg); color:#ffd18a; }
+.launcherHeaderBtn:hover { background:var(--state-hover-bg); }
+.launcherHeaderBtnIcon { font-size:14px; line-height:1; }
+.launcherGrid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; padding:4px 2px 18px; }
+.launcherCard { border-radius:var(--r-sm); background:#1c1e24; border:1px solid var(--panel-border); box-shadow:none; transition:border-color .12s ease, background .12s ease; }
+.launcherCard:hover { transform:none; border-color:rgba(255,190,98,.4); background:#242730; }
+.launcherThumb { aspect-ratio:16 / 10; background:#15171c; }
+.launcherThumbPlaceholder { background:none; }
+.launcherThumbPlaceholder svg { width:40px; height:40px; opacity:.3; }
+.launcherMeta { padding:8px 9px 9px; }
+.launcherName { font-size:var(--fs-sm); font-weight:600; }
+.launcherMenuBtn { border-radius:var(--r-xs); }
+.launcherMenu { top:44px; right:9px; border-radius:var(--r-sm); background:#0f1015; border:1px solid var(--panel-border-strong); box-shadow:0 6px 16px rgba(0,0,0,.35); }
 .launcherFooter { align-items:center; padding:12px 2px 0; border-top:1px solid rgba(255,255,255,.06); }
 .launcherFooterInfo { display:flex; align-items:center; gap:7px; font-size:9px; color:rgba(238,242,255,.34); }
-.launcherFooterDot { width:6px; height:6px; border-radius:50%; background:#69d39a; box-shadow:0 0 10px rgba(105,211,154,.4); }
+.launcherFooterDot { width:6px; height:6px; border-radius:50%; background:#69d39a; box-shadow:none; }
 .launcherFooterActions { display:flex; gap:8px; }
 
 @media (max-width: 760px) {
@@ -4864,9 +4882,9 @@ body.launcher-active canvas {
   box-sizing: border-box;
   padding: 16px;
   border: 1px solid var(--panel-border);
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   background: #1a1d24;
-  box-shadow: 0 12px 40px rgba(0,0,0,.4);
+  box-shadow: 0 4px 16px rgba(0,0,0,.5);
 }
 .projectNameHeader { display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .projectNameTitle { font-size: 15px; font-weight: 700; color: #f3f4f8; }
@@ -5103,7 +5121,7 @@ body.launcher-active canvas {
 .procActionRow .procRemoveBtn{width:100%;justify-content:center;background:rgba(255,255,255,.035);color:rgba(235,239,250,.72)}
 .procActionRow .procRemoveBtn:hover{background:rgba(220,80,80,.11);border-color:rgba(220,110,110,.25);color:#f4b0b0}
 .pbrPromptBackdrop{position:fixed;inset:0;z-index:1000100;background:rgba(5,7,11,.6)}
-.pbrPromptModal{position:fixed;z-index:1000101;left:50%;top:50%;transform:translate(-50%,-50%);width:min(360px,calc(100vw - 28px));box-sizing:border-box;padding:16px;border:1px solid var(--panel-border);border-radius:12px;background:#1a1d24;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+.pbrPromptModal{position:fixed;z-index:1000101;left:50%;top:50%;transform:translate(-50%,-50%);width:min(360px,calc(100vw - 28px));box-sizing:border-box;padding:16px;border:1px solid var(--panel-border);border-radius:var(--r-lg);background:#1a1d24;box-shadow:0 4px 16px rgba(0,0,0,.5)}
 .pbrPromptHeader{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .pbrPromptTitle{font-size:15px;font-weight:700;color:#f3f4f8}
 .pbrPromptClose{width:26px;height:26px;flex-shrink:0;border:none;border-radius:7px;background:rgba(255,255,255,.06);color:rgba(235,239,250,.7);font:inherit;font-size:16px;line-height:1;cursor:pointer}.pbrPromptClose:hover{background:rgba(255,255,255,.12);color:#fff}
