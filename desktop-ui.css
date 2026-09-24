@@ -1,0 +1,851 @@
+/* =====================================================================
+   NCM DESKTOP SHELL — PC PORT SKIN
+   Visual-only shell layer. Existing IDs/JS contracts are preserved.
+   ===================================================================== */
+
+:root {
+  --pc-titlebar: 24px;
+  --pc-toolbar: 42px;
+  /* Bottom status dock matches the main top toolbar height. */
+  --pc-status: var(--pc-toolbar);
+  --pc-left-rail: 42px;
+  --pc-left-width: 238px;
+  --pc-right-width: 252px;
+  --pc-border: #30343a;
+  --pc-border-soft: #25282d;
+  --pc-surface-0: #101214;
+  --pc-surface-1: #17191c;
+  --pc-surface-2: #1d2024;
+  --pc-surface-3: #24282d;
+  --pc-surface-4: #2a2f35;
+  --pc-text: #d9dde2;
+  --pc-text-dim: #8d949d;
+  --pc-text-faint: #606870;
+  --pc-accent: #f0a64a;
+  --pc-accent-soft: rgba(240,166,74,.13);
+  --pc-blue: #6ca8ff;
+  --pc-green: #62c895;
+  --pc-danger: #df7474;
+  --pc-radius: 2px;
+}
+
+html, body {
+  background: #0d0f11 !important;
+  color: var(--pc-text);
+}
+
+body {
+  font-family: 'Segoe UI', Inter, system-ui, sans-serif !important;
+  font-size: 12px;
+}
+
+/* ----------------------------- MENU BAR -------------------------------- */
+#menuBar {
+  height: var(--pc-titlebar) !important;
+  background: #16181b !important;
+  border-bottom: 1px solid #30343a !important;
+  box-shadow: inset 0 -1px 0 rgba(0,0,0,.45);
+}
+.menuBarContent {
+  padding: 0 7px !important;
+  gap: 10px !important;
+}
+.menuBarBrand {
+  font-size: 9px !important;
+  letter-spacing: .14em !important;
+  color: #9ba2aa !important;
+  padding-right: 8px;
+  border-right: 1px solid #30343a;
+}
+.menuBarLabel {
+  font-family: inherit !important;
+  font-size: 11px !important;
+  padding: 0 9px !important;
+  color: #b8bec5 !important;
+}
+.menuBarLabel:hover,
+.menuBarLabel.active {
+  background: #25292e !important;
+  color: #f1f3f5 !important;
+}
+.menuBarDropdown {
+  top: calc(100% + 1px) !important;
+  min-width: 188px !important;
+  border-radius: 0 !important;
+  background: #202329 !important;
+  border-color: #3a4047 !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,.62) !important;
+}
+.menuBarDropdownItem {
+  border-radius: 0 !important;
+  min-height: 27px;
+  padding: 5px 9px !important;
+}
+.menuBarDropdownItem:hover {
+  background: #2d3238 !important;
+}
+
+/* ----------------------------- TOP TOOLBAR ------------------------------- */
+#topBar {
+  top: var(--pc-titlebar) !important;
+  height: var(--pc-toolbar) !important;
+  background: #181a1d !important;
+}
+#topBar .barContent {
+  padding: 0 7px !important;
+  background: #181a1d !important;
+  border-bottom: 1px solid #32363c !important;
+}
+#gizmoPanel {
+  background: #121417 !important;
+  border: 1px solid #30343a !important;
+  border-radius: 2px !important;
+  padding: 2px !important;
+  gap: 1px !important;
+}
+.uiBtn.gizmoBtn {
+  width: 31px !important;
+  height: 31px !important;
+  border: 1px solid transparent !important;
+  border-radius: 2px !important;
+  background: transparent !important;
+  color: #9299a2 !important;
+}
+.uiBtn.gizmoBtn:hover {
+  background: #24282d !important;
+  color: #e4e7eb !important;
+}
+.uiBtn.gizmoBtn.active {
+  background: #2a2a25 !important;
+  border-color: rgba(240,166,74,.55) !important;
+  color: var(--pc-accent) !important;
+}
+.gizmoDivider {
+  height: 23px !important;
+  margin: 0 3px !important;
+  background: #33383f !important;
+}
+
+#pcWorkspaceTitle {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 0;
+  max-width: 42%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #aab1b9;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+#pcWorkspaceTitle .pcTitleProject {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  font-weight: 600;
+  color: #d8dce1;
+}
+#pcWorkspaceTitle .pcTitleSep { color: #4e555d; }
+#pcWorkspaceTitle .pcTitleMode {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: #7c848d;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+#pcWorkspaceTitle .pcTitleState {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pc-green);
+  box-shadow: 0 0 0 2px rgba(98,200,149,.08);
+}
+
+#topBarRight {
+  margin-left: auto !important;
+  background: #121417 !important;
+  border: 1px solid #30343a !important;
+  border-radius: 2px !important;
+  padding: 2px !important;
+  gap: 1px !important;
+}
+.topBarIconBtn {
+  min-height: 31px !important;
+  padding: 0 9px !important;
+  border-radius: 2px !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  color: #9ba2aa !important;
+  font-size: 10px !important;
+}
+.topBarIconBtn:hover {
+  background: #252a30 !important;
+  border-color: #353b42 !important;
+  color: #eef1f4 !important;
+}
+.topBarIconBtn.active {
+  background: var(--pc-accent-soft) !important;
+  border-color: rgba(240,166,74,.45) !important;
+  color: var(--pc-accent) !important;
+}
+
+/* ----------------------------- DOCKED LEFT -------------------------------- */
+#leftPanel {
+  top: calc(var(--pc-titlebar) + var(--pc-toolbar)) !important;
+  bottom: var(--pc-status) !important;
+  width: var(--pc-left-width) !important;
+  display: flex !important;
+  flex-direction: row !important;
+  background: var(--pc-surface-1) !important;
+  border-right: 1px solid var(--pc-border) !important;
+  box-shadow: inset -1px 0 0 rgba(255,255,255,.015);
+}
+#leftPanelButtons {
+  width: var(--pc-left-rail) !important;
+  min-width: var(--pc-left-rail) !important;
+  height: 100% !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  border-right: 1px solid var(--pc-border) !important;
+  border-bottom: 0 !important;
+  background: #141619 !important;
+  padding: 3px 0 !important;
+}
+.leftPanelBtn {
+  flex: 0 0 40px !important;
+  width: 100% !important;
+  min-height: 40px !important;
+  padding: 4px 2px !important;
+  border-right: 0 !important;
+  border-top: 0 !important;
+  border-left: 2px solid transparent !important;
+  border-bottom: 1px solid transparent !important;
+  gap: 2px !important;
+  color: #7f8790 !important;
+  background: transparent !important;
+  font-size: 8px !important;
+  letter-spacing: .03em !important;
+  text-transform: uppercase;
+}
+.leftPanelBtn svg { width: 15px !important; height: 15px !important; }
+.leftPanelBtn:hover {
+  background: #202429 !important;
+  color: #d8dde2 !important;
+}
+.leftPanelBtn.active {
+  border-left-color: var(--pc-accent) !important;
+  border-top: 0 !important;
+  background: #25221d !important;
+  color: var(--pc-accent) !important;
+}
+#leftPanelContent {
+  min-width: 0;
+  flex: 1 !important;
+  background: #191b1e !important;
+  border-left: 0 !important;
+}
+.leftSubPanel { padding: 8px !important; }
+.subPanelTitle {
+  margin: -8px -8px 8px !important;
+  min-height: 29px !important;
+  padding: 0 9px !important;
+  background: #1d2024 !important;
+  border-bottom: 1px solid var(--pc-border) !important;
+  font-size: 10px !important;
+  letter-spacing: .08em !important;
+}
+
+/* ----------------------------- PANEL CONTENT ----------------------------- */
+.panelSection {
+  margin-bottom: 10px !important;
+  padding-bottom: 9px;
+  border-bottom: 1px solid #2a2e33;
+  gap: 6px !important;
+}
+.panelSection:last-child { border-bottom: 0; }
+.sectionTitle,
+.camSectionTitle,
+.procPbrHint,
+.labs-palette-hint {
+  font-size: 9px !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase;
+  color: #737b84 !important;
+}
+.categoryGrid {
+  grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+  gap: 4px !important;
+}
+.menuItem {
+  min-height: 34px !important;
+  border-radius: 2px !important;
+  border-color: #30353b !important;
+  background: #202328 !important;
+  color: #d6dbe0 !important;
+  box-shadow: none !important;
+  padding: 5px 7px !important;
+}
+.menuItem:hover {
+  background: #292e34 !important;
+  border-color: #414850 !important;
+}
+.menuItem:active { transform: none !important; }
+
+.sectionHeader,
+.procPbrMap > summary,
+.textureBtn,
+.renderModeBtn,
+.actionsButton,
+.camAddBtn,
+.camPovBtn,
+.setBtn,
+.setRow,
+.procGenerateBtn,
+.procRemoveBtn,
+.procPreviewShape {
+  border-radius: 2px !important;
+  box-shadow: none !important;
+}
+.sectionHeader {
+  min-height: 27px !important;
+  background: #22262b !important;
+  border-color: #343a40 !important;
+  color: #d8dde1 !important;
+}
+.sectionHeader:hover,
+.actionsButton:hover,
+.camAddBtn:hover,
+.setBtn:hover {
+  background: #2b3036 !important;
+}
+.controlRow { grid-template-columns: 92px minmax(0,1fr) !important; gap: 6px !important; }
+.controlLabel { color: #8f969f !important; font-size: 9px !important; }
+.controlRow input[type="number"],
+.controlRow input[type="color"],
+.camPropRow input[type="number"],
+.camNum,
+.camNumFull,
+.rsSelect,
+.rsDimInput {
+  height: 24px !important;
+  border-radius: 2px !important;
+  border: 1px solid #343a41 !important;
+  background: #111317 !important;
+  color: #dde1e5 !important;
+  font-family: 'JetBrains Mono','Courier New',monospace !important;
+  font-size: 10px !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+}
+.controlRow input:focus,
+.camPropRow input:focus,
+.rsSelect:focus,
+.rsDimInput:focus {
+  border-color: rgba(108,168,255,.65) !important;
+  box-shadow: 0 0 0 1px rgba(108,168,255,.16) !important;
+}
+
+/* ----------------------------- MATERIAL / PBR ---------------------------- */
+#materialPanel .textureGrid,
+#materialPanel .procPbrMaps { gap: 3px !important; }
+#materialPanel .procPbrMap {
+  border-bottom: 1px solid #2d3238 !important;
+}
+#materialPanel .procPbrMap > summary {
+  min-height: 30px !important;
+  padding: 0 7px !important;
+  background: #22262a !important;
+  border: 1px solid #33383e !important;
+}
+#materialPanel .procPbrBody { padding: 6px 7px 8px !important; background: #1a1d21 !important; }
+#materialPanel .procActionRow { gap: 4px !important; }
+#materialPanel .procActionRow .uiBtn {
+  min-height: 25px !important;
+  border-radius: 2px !important;
+  font-size: 9px !important;
+}
+
+/* Right-side viewer only: controls remain on the Material panel. */
+#matExtAccordion { display: none !important; }
+#materialLabHeader {
+  height: 29px !important;
+  padding: 0 8px !important;
+  background: #1d2024 !important;
+  border-bottom: 1px solid #32373d !important;
+}
+#materialLabRoot {
+  min-height: 0;
+  background: #111317 !important;
+}
+.procLabViewerOnly {
+  height: 100% !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0,1fr) 31px !important;
+  background: #101214 !important;
+}
+.procLabHeader {
+  min-height: 34px !important;
+  padding: 5px 8px !important;
+  border-bottom: 1px solid #2c3137 !important;
+  background: #181b1f !important;
+}
+.procLabTitle { font-size: 10px !important; text-transform: uppercase; letter-spacing: .08em; color: #d6dade !important; }
+.procLabSub { font-size: 8px !important; color: #6f7780 !important; margin-top: 1px; }
+.procPbrPreviewWrap {
+  min-height: 0 !important;
+  background: linear-gradient(180deg,#1d2126,#111317) !important;
+  border: 0 !important;
+  position: relative;
+}
+.procPbrPreview {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 150px !important;
+  image-rendering: auto;
+}
+.procPbrViewportBadge {
+  position: absolute !important;
+  left: 7px !important;
+  top: 7px !important;
+  border: 1px solid #343a40 !important;
+  border-radius: 2px !important;
+  background: rgba(13,15,18,.86) !important;
+  color: #8f969e !important;
+}
+.procPreviewToolbar {
+  display: grid !important;
+  grid-template-columns: repeat(3,1fr) !important;
+  gap: 1px !important;
+  border-top: 1px solid #30353a !important;
+  background: #0f1114 !important;
+  padding: 2px !important;
+}
+.procPreviewShape {
+  min-height: 24px !important;
+  background: #1c2024 !important;
+  color: #9299a1 !important;
+  border: 1px solid transparent !important;
+  font-size: 9px !important;
+}
+.procPreviewShape:hover { background: #252a2f !important; color: #e2e6ea !important; }
+.procPreviewShape.active {
+  background: rgba(240,166,74,.13) !important;
+  border-color: rgba(240,166,74,.38) !important;
+  color: var(--pc-accent) !important;
+}
+
+/* ----------------------------- RIGHT OUTLINER ----------------------------- */
+#rightPanel {
+  top: calc(var(--pc-titlebar) + var(--pc-toolbar)) !important;
+  bottom: var(--pc-status) !important;
+  width: var(--pc-right-width) !important;
+  background: #17191c !important;
+  border-left: 1px solid #30343a !important;
+}
+#rightPanelHeader {
+  height: 31px !important;
+  min-height: 31px !important;
+  padding: 0 7px !important;
+  background: #1d2024 !important;
+  border-bottom: 1px solid #32373c !important;
+}
+.rightPanelTitle { font-size: 9px !important; letter-spacing: .09em !important; color: #a8afb7 !important; }
+.actionsButton {
+  min-height: 23px !important;
+  padding: 0 7px !important;
+  border-color: #353b42 !important;
+  background: #23272c !important;
+  font-size: 9px !important;
+}
+#rightPanelWorkspace {
+  background: #15181b !important;
+}
+#objectsSection {
+  background: #15181b !important;
+}
+#objectsList {
+  padding: 4px 0 !important;
+}
+.objectItem {
+  min-height: 27px !important;
+  border-radius: 0 !important;
+  border-bottom: 1px solid rgba(255,255,255,.035) !important;
+  padding: 0 7px !important;
+  color: #aeb5bd !important;
+}
+.objectItem:hover { background: #22272c !important; }
+.objectItem.selected,
+.objectItem.active {
+  background: #2a2721 !important;
+  color: #f0b369 !important;
+  box-shadow: inset 2px 0 0 var(--pc-accent) !important;
+}
+.objectName { font-size: 10px !important; }
+
+/* Extension arrow deliberately protrudes from the dock; it is not part of the bottom bar. */
+#rightPanelFooter {
+  position: relative !important;
+  height: 25px !important;
+  min-height: 25px !important;
+  padding: 0 !important;
+  border-top: 1px solid #30343a !important;
+  background: #141619 !important;
+}
+#rightPanelFooterRow {
+  height: 100% !important;
+  padding: 0 6px !important;
+  gap: 4px !important;
+}
+#panelExtensionToggleBtn {
+  position: absolute !important;
+  left: -20px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 19px !important;
+  height: 30px !important;
+  z-index: 5 !important;
+  border: 1px solid #30343a !important;
+  border-right: 0 !important;
+  border-radius: 2px 0 0 2px !important;
+  background: #17191c !important;
+}
+#panelExtensionToggleBtn.active svg { transform: rotate(90deg) !important; }
+#renderLightToggleBtn {
+  min-width: 29px !important;
+  width: 29px !important;
+  height: 21px !important;
+  padding: 0 !important;
+  border-radius: 2px !important;
+  background: #202429 !important;
+  border: 1px solid #353a40 !important;
+}
+#renderLightToggleBtn:hover { background: #2b3036 !important; }
+
+/* ----------------------------- BOTTOM STATUS ----------------------------- */
+#bottomBar {
+  height: var(--pc-status) !important;
+  background: #17191c !important;
+}
+#bottomBar .bottomBarContent {
+  height: 100% !important;
+  min-height: var(--pc-status) !important;
+  padding: 0 7px !important;
+  background: #17191c !important;
+  border-top: 1px solid #30343a !important;
+}
+.bbObjName,.bbCoordLabel,.bbCoordVal,.bbStat,.bbFps,.bbBadge {
+  font-size: 9px !important;
+}
+.bbBadge {
+  min-height: 17px !important;
+  padding: 1px 5px !important;
+  border-radius: 2px !important;
+  background: #22272d !important;
+  border: 1px solid #353b41 !important;
+}
+
+/* ----------------------------- FLOATING INFO ----------------------------- */
+.fp {
+  border-radius: 2px !important;
+  border-color: #3a4047 !important;
+  background: #1b1e22 !important;
+  box-shadow: 0 14px 32px rgba(0,0,0,.58) !important;
+}
+.fp-header { background: #24282d !important; border-bottom-color: #363c43 !important; }
+.fp-title { font-size: 10px !important; }
+.fp-type-badge { border-radius: 2px !important; }
+
+/* ----------------------------- MODALS / SETTINGS ------------------------ */
+.settingsMenu,
+.ncmUpdatesMenu,
+.animConfirmModal,
+.projectNameModal,
+.labsConfirmModal {
+  border-radius: 2px !important;
+  background: #202328 !important;
+  border-color: #3a4047 !important;
+  box-shadow: 0 18px 44px rgba(0,0,0,.64), 0 0 0 1px rgba(255,255,255,.02) !important;
+}
+.settingsMenuHeader,
+.ncmUpdatesHeader {
+  background: #2a2e33 !important;
+  border-bottom-color: #3b4148 !important;
+}
+.settingsMenuBody { background: #1b1e22 !important; padding: 5px !important; gap: 5px !important; }
+.setSection {
+  border-radius: 2px !important;
+  background: #202428 !important;
+  border-color: #31373e !important;
+  padding: 6px !important;
+}
+
+/* ----------------------------- LABS -------------------------------------- */
+#labsLeftPanel {
+  top: calc(var(--pc-titlebar) + var(--pc-toolbar)) !important;
+  bottom: var(--pc-status) !important;
+  width: var(--pc-left-width) !important;
+  flex-direction: row !important;
+  background: #17151c !important;
+  border-right-color: #393342 !important;
+}
+#labsLeftPanelButtons {
+  width: var(--pc-left-rail) !important;
+  min-width: var(--pc-left-rail) !important;
+  height: 100% !important;
+  flex-direction: column !important;
+  border-right: 1px solid #3a3444 !important;
+  border-bottom: 0 !important;
+  background: #131116 !important;
+}
+#labsPage1Buttons { flex-direction: column !important; }
+#labsPage1Buttons .leftPanelBtn {
+  flex: 0 0 40px !important;
+  width: 100% !important;
+  border-left: 2px solid transparent !important;
+  border-bottom: 1px solid transparent !important;
+}
+#labsPage1Buttons .leftPanelBtn.active {
+  border-left-color: #a78bfa !important;
+  border-bottom-color: transparent !important;
+  background: rgba(167,139,250,.11) !important;
+}
+#labsLeftContent { background: #19171e !important; }
+#labsCategoryBtns { background: #18151b !important; }
+.labsCatBtn { border-radius: 0 !important; }
+
+#labsSection {
+  background: #17151c !important;
+}
+.labsCatBtn.active {
+  color: #c9b5ff !important;
+  background: rgba(167,139,250,.10) !important;
+  box-shadow: inset 0 -2px 0 #a78bfa !important;
+}
+
+/* ----------------------------- CAMERA / RENDER / LIGHTS ------------------ */
+.camSection,
+.renderSection,
+.lightSection,
+.rsSection {
+  border-bottom: 1px solid #2a2f35 !important;
+  padding-bottom: 8px !important;
+  margin-bottom: 8px !important;
+}
+.camAddBtn,
+.camPovBtn,
+.renderModeBtn,
+.rsButton,
+.rsPresetBtn {
+  border-radius: 2px !important;
+  min-height: 25px !important;
+}
+
+/* ----------------------------- ANIMATION / TIMELINE ---------------------- */
+#animLeftPanel {
+  top: calc(var(--pc-titlebar) + var(--pc-toolbar)) !important;
+  bottom: var(--pc-status) !important;
+  background: #17191c !important;
+  border-right-color: #30343a !important;
+}
+#animPanel,
+.animationPanel,
+.timelinePanel,
+#timelinePanel {
+  border-radius: 0 !important;
+}
+#bottomBar .timeline,
+#bottomBar .timelineRoot {
+  border-radius: 0 !important;
+}
+
+/* ----------------------------- BONES / GIZMOS ---------------------------- */
+#bonePanelContainer {
+  border-radius: 2px !important;
+  border-color: #3a4047 !important;
+  background: #1b1e22 !important;
+}
+#axesGizmo2D {
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,.45));
+}
+
+/* ----------------------------- RENDER PROGRESS --------------------------- */
+#renderProgressOverlay {
+  font-family: 'Segoe UI', Inter, system-ui, sans-serif !important;
+  font-size: 11px !important;
+  letter-spacing: .02em !important;
+  text-shadow: 0 2px 7px rgba(0,0,0,.72) !important;
+}
+
+/* ----------------------------- LAUNCHER ---------------------------------- */
+#launcherScreen {
+  background: #111316 !important;
+  color: #d8dde2 !important;
+}
+.launcherTop {
+  padding: 18px 20px 14px !important;
+  border-bottom: 1px solid #30343a !important;
+  background: #191c20 !important;
+}
+.launcherEyebrow {
+  color: #737b84 !important;
+  letter-spacing: .12em !important;
+}
+.launcherTitle {
+  color: #e6e9ed !important;
+  font-size: 22px !important;
+  font-weight: 600 !important;
+}
+.launcherSubtitle { color: #7f8790 !important; }
+.launcherGrid {
+  padding: 12px 16px !important;
+  gap: 7px !important;
+}
+.launcherHeaderBtn,
+.launcherSettingsBtn,
+.launcherFooterBtn {
+  border-radius: 2px !important;
+  border-color: #3a4047 !important;
+  background: #23272c !important;
+}
+.launcherHeaderBtn:hover,
+.launcherSettingsBtn:hover,
+.launcherFooterBtn:hover {
+  background: #2c3137 !important;
+}
+.launcherCard,
+.projectCard,
+.launcherProjectCard {
+  border-radius: 2px !important;
+  border-color: #343a41 !important;
+  background: #1d2024 !important;
+}
+.launcherCard:hover,
+.projectCard:hover,
+.launcherProjectCard:hover {
+  background: #252a30 !important;
+  border-color: #4a5159 !important;
+}
+.launcherFooter {
+  background: #181a1d !important;
+  border-top-color: #30343a !important;
+}
+
+/* ----------------------------- MEDIA ------------------------------------- */
+@media (max-width: 760px) {
+  :root {
+    --pc-left-width: 210px;
+    --pc-right-width: 190px;
+  }
+  #pcWorkspaceTitle { max-width: 30%; }
+  #pcWorkspaceTitle .pcTitleProject { max-width: 100px; }
+}
+
+@media (max-width: 540px) {
+  :root {
+    --pc-left-width: 178px;
+    --pc-right-width: 166px;
+    --pc-left-rail: 38px;
+  }
+  #pcWorkspaceTitle { display: none; }
+  .menuBarBrand { display: none; }
+  .topBarIconBtn span { display: none; }
+  .topBarIconBtn { width: 31px !important; padding: 0 !important; justify-content: center; }
+  .leftPanelBtn span { display: none; }
+  .leftPanelBtn { flex-basis: 38px !important; min-height: 38px !important; }
+  #rightPanel { --right-w: 154px; }
+  #rightPanelHeader { padding: 0 5px !important; }
+  .actionsButton { width: 24px !important; padding: 0 !important; justify-content: center; }
+  .actionsButton { font-size: 0 !important; }
+  .actionsButton svg { margin: 0 !important; }
+}
+
+/* =====================================================================
+   NCM PC SHELL GEOMETRY FIX — compact docks + viewport-safe overlays
+   Keeps the 2D gizmo / undo-redo in the viewport instead of under the
+   right dock, and prevents dock content from escaping its bounds.
+   ===================================================================== */
+:root {
+  /* Keep the desktop port compact; the viewport remains the primary work area. */
+  --pc-left-width: 190px;
+  --pc-right-width: 190px;
+}
+
+#leftPanel,
+#rightPanel {
+  box-sizing: border-box !important;
+  max-width: 100vw !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+#leftPanelContent,
+#rightPanelWorkspace,
+#objectsSection,
+#objectsList,
+#panelExtension,
+#panelExtension > * {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: 100% !important;
+}
+
+#leftPanelContent,
+#rightPanelWorkspace,
+#objectsList {
+  overflow: auto !important;
+  overflow-x: hidden !important;
+}
+
+/* The desktop shell uses --pc-right-width; the base stylesheet's
+   --right-w was left at the old mobile geometry, which made overlays drift
+   into the right dock. Bind the viewport overlays to the real desktop dock. */
+#axesGizmo2D {
+  right: calc(var(--pc-right-width) + 12px) !important;
+  max-width: 72px;
+}
+
+#undoRedoOverlay {
+  right: calc(var(--pc-right-width) + 12px) !important;
+  bottom: calc(var(--pc-status) + 9px) !important;
+  z-index: 60 !important;
+}
+
+#renderProgressOverlay {
+  left: calc(var(--pc-left-width) + 12px) !important;
+  z-index: 60 !important;
+}
+
+/* Keep the bottom-right extension arrow physically outside the dock. */
+#panelExtensionToggleBtn {
+  left: -20px !important;
+  transform: translateY(-50%) !important;
+}
+
+/* Narrow desktop/tablet windows: reduce docks before they consume the viewport. */
+@media (max-width: 1100px) {
+  :root {
+    --pc-left-width: 176px;
+    --pc-right-width: 176px;
+  }
+}
+
+@media (max-width: 760px) {
+  :root {
+    --pc-left-width: 164px;
+    --pc-right-width: 164px;
+  }
+  #axesGizmo2D { right: calc(var(--pc-right-width) + 8px) !important; }
+  #undoRedoOverlay { right: calc(var(--pc-right-width) + 8px) !important; }
+}
+
+@media (max-width: 540px) {
+  :root {
+    --pc-left-width: 154px;
+    --pc-right-width: 154px;
+  }
+  #axesGizmo2D { right: calc(var(--pc-right-width) + 6px) !important; }
+  #undoRedoOverlay { right: calc(var(--pc-right-width) + 6px) !important; }
+}
