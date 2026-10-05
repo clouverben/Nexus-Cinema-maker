@@ -9,8 +9,8 @@
 
 const HEIGHT_KEY = 'ncm.timelineHeight';
 const SECTIONS_KEY = 'ncm.animSections';
-const DEFAULT_H = 176;
-const MIN_H = 124;
+const DEFAULT_H = 96;
+const MIN_H = 72;
 
 let _inited = false;
 
