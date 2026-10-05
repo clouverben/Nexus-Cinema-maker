@@ -1,0 +1,217 @@
+/* =====================================================================
+   object-menu.css — Menu de objeto (segure 1,5 s em um objeto da cena).
+   Janela compacta (~400 px), arrastável como o visualizer de render.
+   Fundo: cinza escuro com um leve tom alaranjado (o laranja fica só nos
+   detalhes: títulos, seleção e botão principal).
+   ===================================================================== */
+
+.omWin {
+  --om-bg-1: #2d2926;
+  --om-bg-2: #272422;
+  --om-bg-3: #201e1c;
+  --om-bar: #342f2c;
+  --om-line: rgba(255, 215, 180, .10);
+  --om-line-strong: rgba(255, 215, 180, .22);
+  --om-card: rgba(255, 245, 235, .035);
+  --om-field: rgba(0, 0, 0, .26);
+  --om-text: #ece6e0;
+  --om-dim: #a89f97;
+  --om-faint: #7d746d;
+  --om-accent: #f0a64a;
+  --om-accent-soft: rgba(240, 166, 74, .15);
+  --om-accent-ink: #261607;
+
+  position: fixed; z-index: 9050;
+  display: flex; flex-direction: column;
+  width: 400px; height: auto;
+  min-width: 320px; min-height: 120px;
+  max-width: 98vw; max-height: 92vh;
+  resize: both; overflow: hidden;
+  background: linear-gradient(165deg, var(--om-bg-1) 0%, var(--om-bg-2) 55%, var(--om-bg-3) 100%);
+  border: 1px solid #4a423c;
+  border-radius: 8px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .6), 0 0 0 1px rgba(0, 0, 0, .4);
+  color: var(--om-text);
+  font-family: var(--font-ui, 'Inter', system-ui, sans-serif);
+  font-size: 12px;
+  user-select: none;
+  animation: omIn .14s ease-out;
+}
+.omWin.hidden { display: none !important; }
+.omWin.omDragging { opacity: .94; }
+@keyframes omIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ── Barra de título (alça de arrastar) ─────────────────────────────── */
+.omTitle {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 48px; padding: 6px 8px 6px 14px; flex-shrink: 0;
+  background: var(--om-bar);
+  border-bottom: 1px solid var(--om-line-strong);
+  cursor: move;
+}
+.omTitleText { flex: 1; min-width: 0; }
+.omName {
+  font-size: 14px; font-weight: 700; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.omCrumb { margin-top: 1px; font-size: 11px; color: var(--om-dim); }
+.omClose {
+  width: 30px; height: 30px; flex-shrink: 0;
+  display: grid; place-items: center;
+  border: 1px solid var(--om-line); border-radius: 6px;
+  background: rgba(0, 0, 0, .18); color: var(--om-dim);
+  font-size: 14px; cursor: pointer; font-family: inherit;
+}
+.omClose:hover { background: #7a3530; border-color: #a14a43; color: #fff; }
+
+.omBody { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px 12px; }
+.omBody > * { animation: omView .12s ease-out; }
+@keyframes omView { from { opacity: 0; transform: translateX(5px); } to { opacity: 1; transform: none; } }
+.omBody::-webkit-scrollbar { width: 8px; }
+.omBody::-webkit-scrollbar-thumb { background: #554b44; border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+
+/* ── Home: 3 categorias ─────────────────────────────────────────────── */
+.omHome { display: flex; flex-direction: column; gap: 8px; }
+.omCat {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 10px 12px;
+  background: var(--om-card);
+  border: 1px solid var(--om-line); border-radius: 8px;
+  color: inherit; font-family: inherit; text-align: left; cursor: pointer;
+  transition: background .1s, border-color .1s;
+}
+.omCat:hover { background: var(--om-accent-soft); border-color: rgba(240, 166, 74, .55); }
+.omCatIcon {
+  width: 38px; height: 38px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: #fff; border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
+  font-size: 18px; line-height: 1;
+}
+.omCatText { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.omCatText b { font-size: 14px; font-weight: 700; }
+.omCatText small { font-size: 11px; color: var(--om-dim); }
+.omCatArrow { font-size: 22px; color: var(--om-faint); line-height: 1; }
+.omCat:hover .omCatArrow { color: var(--om-accent); }
+
+/* ── Informações ────────────────────────────────────────────────────── */
+.omInfoGrid { display: flex; flex-direction: column; gap: 8px; }
+.omSwatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(255, 255, 255, .35); display: inline-block; }
+.omEmpty { padding: 28px 12px; text-align: center; color: var(--om-dim); font-size: 12px; }
+
+/* ── Cards ──────────────────────────────────────────────────────────── */
+.omStack { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.omCard { padding: 10px 12px 12px; background: var(--om-card); border: 1px solid var(--om-line); border-radius: 8px; }
+.omCard.dim { opacity: .55; }
+.omCard h3 { margin: 0 0 8px; font-size: 11.5px; font-weight: 700; color: var(--om-accent); }
+.omCard h3 em { font-style: normal; font-weight: 500; color: var(--om-dim); }
+.omRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--om-line); }
+.omRow:last-child { border-bottom: 0; }
+.omRow > span { color: var(--om-dim); }
+.omRow > b { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; user-select: text; display: inline-flex; align-items: center; gap: 6px; }
+.omLabel { margin: 10px 0 5px; font-size: 11px; color: var(--om-dim); }
+.omLabel:first-of-type { margin-top: 2px; }
+
+/* ── Segmentados / chips / botões ───────────────────────────────────── */
+.omSegRow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.omSegRow3 { grid-template-columns: repeat(3, 1fr); }
+.omSegRow4 { grid-template-columns: repeat(4, 1fr); }
+.omSeg {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  min-height: 32px; padding: 5px 6px;
+  background: var(--om-field); border: 1px solid var(--om-line); border-radius: 6px;
+  color: var(--om-text); font-family: inherit; cursor: pointer;
+}
+.omSeg b { font-size: 12px; font-weight: 600; }
+.omSeg small { font-size: 10px; color: var(--om-dim); }
+.omSeg:hover:not(:disabled) { border-color: var(--om-line-strong); }
+.omSeg.active { background: var(--om-accent-soft); border-color: var(--om-accent); color: var(--om-accent); }
+.omSeg.active small { color: #d9ad78; }
+.omSeg:disabled, .omChip:disabled, .omBtn:disabled { opacity: .4; cursor: not-allowed; }
+
+.omChips { display: flex; flex-wrap: wrap; gap: 5px; }
+.omChip {
+  padding: 4px 10px; border-radius: 999px;
+  background: var(--om-field); border: 1px solid var(--om-line);
+  color: var(--om-text); font-size: 11px; font-family: inherit; cursor: pointer;
+}
+.omChip:hover:not(:disabled) { border-color: var(--om-line-strong); }
+.omChip.active { background: var(--om-accent-soft); border-color: var(--om-accent); color: var(--om-accent); }
+
+.omBtnRow { display: flex; gap: 6px; margin-top: 10px; }
+.omBtn {
+  flex: 1 1 0; min-height: 32px; padding: 0 8px;
+  background: var(--om-field); border: 1px solid var(--om-line-strong); border-radius: 6px;
+  color: var(--om-text); font-size: 11.5px; font-weight: 600; font-family: inherit; cursor: pointer; white-space: nowrap;
+}
+.omBtn:hover:not(:disabled) { border-color: var(--om-accent); }
+.omBtn.primary { background: var(--om-accent); border-color: var(--om-accent); color: var(--om-accent-ink); }
+.omBtn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+
+.omPreview {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 10px; padding: 7px 10px;
+  background: var(--om-field); border: 1px solid var(--om-line); border-radius: 6px;
+}
+.omPreview span { color: var(--om-dim); }
+.omPreview b { font-variant-numeric: tabular-nums; }
+.omPreview.warn { border-color: #b4524a; }
+.omPreview.warn b { color: #ff9a8e; }
+.omHint { margin-top: 7px; font-size: 11px; color: var(--om-dim); }
+.omHint.warn { color: #ff9a8e; }
+
+/* ── Sliders / switch / checkbox (Física) ───────────────────────────── */
+.omSliderGrid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; row-gap: 2px; }
+.omSlider { display: block; padding: 4px 0 6px; min-width: 0; }
+.omSlider.off { opacity: .5; }
+.omSliderTop { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin-bottom: 5px; font-size: 11px; }
+.omSliderTop > span { color: var(--om-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.omSliderTop output { color: var(--om-accent); font-size: 10.5px; white-space: nowrap; }
+.omSlider input[type="range"] {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 2px;
+  background: rgba(0, 0, 0, .4); outline: none; cursor: pointer; margin: 4px 0 2px;
+}
+.omSlider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
+  background: var(--om-accent); border: 2px solid #2d2926; box-shadow: 0 0 0 1px var(--om-accent);
+}
+.omSlider input[type="range"]::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: var(--om-accent); border: 2px solid #2d2926; }
+.omSlider input[type="range"]:disabled { cursor: not-allowed; }
+
+.omSwitchRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
+.omSwitchRow > span:first-child { display: flex; flex-direction: column; gap: 2px; }
+.omSwitchRow b { font-size: 12.5px; }
+.omSwitchRow small { font-size: 10.5px; color: var(--om-dim); }
+.omSwitch { position: relative; width: 38px; height: 22px; flex-shrink: 0; }
+.omSwitch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
+.omSwitch i { position: absolute; inset: 0; border-radius: 999px; background: var(--om-field); border: 1px solid var(--om-line-strong); transition: background .12s; }
+.omSwitch i::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: #cfc6bd; transition: transform .12s, background .12s;
+}
+.omSwitch input:checked + i { background: var(--om-accent); border-color: var(--om-accent); }
+.omSwitch input:checked + i::after { transform: translateX(16px); background: #fff; }
+
+.omCheckRow { display: flex; align-items: center; gap: 8px; padding: 4px 0 0; font-size: 11.5px; cursor: pointer; }
+.omCheckRow input { width: 14px; height: 14px; accent-color: var(--om-accent); cursor: pointer; }
+
+.omStatus {
+  margin-top: 8px; padding: 7px 9px; min-height: 28px;
+  background: var(--om-field); border: 1px solid var(--om-line); border-radius: 6px;
+  font-size: 11px; line-height: 1.4; color: var(--om-dim); user-select: text;
+}
+.omStatus.err { color: #ff9a8e; border-color: #b4524a; }
+
+/* ── Anel de progresso do clique longo ──────────────────────────────── */
+.omHoldRing {
+  position: fixed; z-index: 9040; width: 44px; height: 44px;
+  margin: -22px 0 0 -22px; pointer-events: none; display: none;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .55));
+}
+.omHoldRing.on { display: block; }
+.omHoldRing svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.omHoldRing circle { fill: rgba(30, 26, 23, .35); stroke-width: 4; }
+.omHoldRing .bg { stroke: rgba(255, 255, 255, .22); }
+.omHoldRing .fg { fill: none; stroke: #f0a64a; stroke-linecap: round; stroke-dasharray: 113.1; stroke-dashoffset: 113.1; }
+.omHoldRing.on .fg { animation: omRing 1.25s linear forwards; }
+@keyframes omRing { to { stroke-dashoffset: 0; } }
