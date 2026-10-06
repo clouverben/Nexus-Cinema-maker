@@ -1481,7 +1481,7 @@ function applyKeyframesAtFrame(frame) {
     // Física na timeline (object-menu.js): objetos com física dinâmica seguem a simulação
     // "assada" entre um keyframe e o próximo.
     try { window.__physTimeline?.apply(frame); }
-    catch (err) { console.warn('[anim] física da timeline falhou:', err); }
+    catch (err) { console.warn('[anim] física da timeline falhou:', err); if (!window.__physErrShown) { window.__physErrShown = true; flashMessage('Física da timeline falhou: ' + (err?.message || err)); setTimeout(() => { window.__physErrShown = false; }, 4000); } }
 }
 
 // API mínima para o object-menu.js ler a animação sem importar este módulo.

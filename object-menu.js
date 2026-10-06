@@ -703,6 +703,7 @@ function physicsHTML() {
         <button type="button" class="omBtn" id="omPhysReset" data-act="phys-reset">&#8634; Resetar</button>
       </div>
       <div class="omStatus" id="omPhysStatus"></div>
+      <div class="omStatus" id="omPhysDiag" style="margin-top:6px"></div>
     </section>
   </div>`;
 }
@@ -1207,10 +1208,12 @@ const TL = {
     }
   },
 
+  diag(text) { this.info = text; const el = $('#omPhysDiag'); if (el) el.textContent = text ? `Timeline: ${text}` : ''; },
+
   /** Chamado a cada quadro da timeline (seek ou play). */
   apply(frame) {
-    if (Phys.hasActive()) return;                                 // simulação manual em curso → não mexe
-    if (!this.hasCandidates()) { if (this.world) this.reset(); return; }
+    if (Phys.hasActive()) { this.diag('simulação manual ativa (botão Simular) — clique em Resetar nos objetos para a timeline assumir.'); return; }
+    if (!this.hasCandidates()) { if (this.world) this.reset(); this.diag('nenhum objeto com física Dinâmica ativada.'); return; }
     if (!Phys.R) {
       if (!this.loading) {
         this.loading = true;
@@ -1260,6 +1263,13 @@ const TL = {
       moved = true;
     }
     if (moved) markSceneDirty();
+    if (!A.isPlaying() || (now - (this._diagAt || 0)) > 250) {
+      this._diagAt = now;
+      this.diag(`quadro ${f0} · ` + this.ents.filter((e) => e.dyn).map((e) => {
+        const m = e.modes[f0], d = e.cache[f0];
+        return `${objName(e.o)}: ${m === 'p' ? `física${d ? ` (y=${d.p[1].toFixed(2)})` : ''}` : 'animação'}`;
+      }).join(' · '));
+    }
   },
 
   /**
@@ -1295,6 +1305,7 @@ function updatePhysStatus() {
   if (play) { play.disabled = !enabled || state === 'running'; play.innerHTML = state === 'paused' ? '&#9654; Continuar' : '&#9654; Simular'; }
   if (pause) pause.disabled = state !== 'running';
   if (reset) reset.disabled = !Phys.entries.has(target);
+  const dg = $('#omPhysDiag'); if (dg && TL.info) dg.textContent = `Timeline: ${TL.info}`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
